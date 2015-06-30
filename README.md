@@ -1,6 +1,6 @@
 ### plmOS XML
 
-plmOS XML is a .NET library that implements a XML Database.
+plmOS XML is a .NET library that implements a XML plmOS Database.
 
 Copyright (C) 2015 [Processwall Limited](http://www.processwall.com).
 
@@ -28,7 +28,7 @@ must enter into a commercial licence agreement with Processwall Limited.
 
 #### Prerequisites
 
- * [plmOS/Model](https://github.com/plmOS/Model)
+ * [plmOS/Database](https://github.com/plmOS/Database)
  
 #### Contact Details
 

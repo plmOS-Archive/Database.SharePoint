@@ -1,15 +1,15 @@
-### plmOS XML
+### plmOS SharePoint
 
-plmOS XML is a .NET library that implements a XML plmOS Database.
+plmOS SharePoint is a .NET library that implements a SharePoint plmOS Database.
 
 Copyright (C) 2015 [Processwall Limited](http://www.processwall.com).
 
-Processwall Limited provides plmOS XML under a dual licence model designed to meet the development 
+Processwall Limited provides plmOS SharePoint under a dual licence model designed to meet the development 
 and distribution needs of both commercial and open source projects.
 
 #### Open Source Projects
 
-Open source projects can redistribute and/or modify plmOS XML under the terms of the 
+Open source projects can redistribute and/or modify plmOS SharePoint under the terms of the 
 GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 

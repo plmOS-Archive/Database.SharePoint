@@ -1,4 +1,4 @@
-### plmOS SharePoint
+### plmOS Database SharePoint
 
 plmOS Database SharePoint is a .NET library that implements a Microsoft SharePoint plmOS Database.
 

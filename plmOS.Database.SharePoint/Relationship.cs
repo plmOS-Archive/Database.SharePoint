@@ -27,6 +27,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
+using System.IO;
 
 namespace plmOS.Database.SharePoint
 {
@@ -65,8 +67,50 @@ namespace plmOS.Database.SharePoint
 
         public Guid ParentBranchID { get; internal set; }
 
-        internal Relationship(Session Session)
-            : base(Session)
+        protected override String FileSuffix
+        {
+            get
+            {
+                return "relationship";
+            }
+        }
+
+        internal override Boolean MatchQuery(Model.Query Query)
+        {
+            if (((Model.Queries.Relationship)Query).Parent.BranchID.Equals(this.ParentBranchID))
+            {
+                return base.MatchQuery(Query);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        protected override void WriteItemAttributes(System.Xml.XmlDocument doc, System.Xml.XmlElement item)
+        {
+            base.WriteItemAttributes(doc, item);
+
+            XmlAttribute parentbranchid = doc.CreateAttribute("ParentBranchID");
+            parentbranchid.Value = this.ParentBranchID.ToString();
+            item.Attributes.Append(parentbranchid);
+        }
+
+        protected override void ReadItemAttributes(XmlDocument doc, XmlNode item)
+        {
+            base.ReadItemAttributes(doc, item);
+
+            this.ParentBranchID = new Guid(item.Attributes["ParentBranchID"].Value);
+        } 
+
+        internal Relationship(Session Session, Database.IRelationship Relationship)
+            : base(Session, Relationship)
+        {
+            this.ParentBranchID = Relationship.ParentBranchID;
+        }
+
+        internal Relationship(Session Session, FileInfo XMLFile)
+            : base(Session, XMLFile)
         {
 
         }

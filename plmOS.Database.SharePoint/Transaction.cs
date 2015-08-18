@@ -27,15 +27,38 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace plmOS.Database.SharePoint
 {
     public class Transaction : Database.ITransaction
     {
+        internal Session Session { get; private set; }
+
+        private List<Item> Items;
+
+        internal void AddItem(Item Item)
+        {
+            if (!this.Items.Contains(Item))
+            {
+                this.Items.Add(Item);
+            }
+        }
+
+        internal DirectoryInfo Directory { get; private set; }
+
         public void Commit()
         {
-            throw new NotImplementedException();
+            Int64 committime = DateTime.UtcNow.Ticks;
+            this.Directory = new DirectoryInfo(this.Session.LocalRootFolder.FullName + "\\" + committime.ToString());
+            this.Directory.Create();
+
+            foreach (Item item in this.Items)
+            {
+                item.Write(this.Directory);
+            }
         }
+
 
         public void Rollback()
         {
@@ -47,8 +70,10 @@ namespace plmOS.Database.SharePoint
 
         }
 
-        public Transaction()
+        internal Transaction(Session Session)
         {
+            this.Items = new List<Item>();
+            this.Session = Session;
         }
     }
 }

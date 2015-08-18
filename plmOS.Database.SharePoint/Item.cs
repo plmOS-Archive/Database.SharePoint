@@ -27,11 +27,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
+using System.Xml;
 
 namespace plmOS.Database.SharePoint
 {
     public class Item : Database.IItem
     {
+        internal static String DateFormat = "yyyy-MM-ddTHH:mm:ss.fff";
+
         internal Session Session { get; private set; }
 
         public virtual Model.ItemType ItemType { get; internal set; }
@@ -68,11 +72,233 @@ namespace plmOS.Database.SharePoint
             this._properties[Property.PropertyType] = Property;
         }
 
-        internal Item(Session Session)
+        private Boolean MatchCondition(Model.Condition Condition)
+        {
+            switch(Condition.GetType().Name)
+            {
+                case "Property":
+
+                    Property property = (Property)this.Property(((Model.Conditions.Property)Condition).PropertyType);
+
+                    switch(property.PropertyType.Type)
+                    {
+                        case Model.PropertyTypeValues.String:
+                            String propvalue = (String)property.Object;
+                            String conditionvalue = (String)((Model.Conditions.Property)Condition).Value;
+
+                            switch (((Model.Conditions.Property)Condition).Operator)
+                            {
+                                case Model.Conditions.Operators.eq:
+                                    return (String.Compare(propvalue, conditionvalue, true) == 0);
+                                case Model.Conditions.Operators.ge:
+                                    return ((String.Compare(propvalue, conditionvalue, true) == 1) || (String.Compare(propvalue, conditionvalue, true) == 0));
+                                case Model.Conditions.Operators.gt:
+                                    return (String.Compare(propvalue, conditionvalue, true) == 1);
+                                case Model.Conditions.Operators.le:
+                                    return ((String.Compare(propvalue, conditionvalue, true) == -1) || (String.Compare(propvalue, conditionvalue, true) == 0));
+                                case Model.Conditions.Operators.lt:
+                                    return (String.Compare(propvalue, conditionvalue, true) == -1);
+                                case Model.Conditions.Operators.ne:
+                                    return (String.Compare(propvalue, conditionvalue, true) != 0);
+                                default:
+                                    throw new NotImplementedException("Condition Operator not implemeted: " + ((Model.Conditions.Property)Condition).Operator);
+                            }
+
+                        default:
+                            throw new NotImplementedException("PropertyType not implemented: " + property.PropertyType.Type);
+                    }
+
+                default:
+                    throw new NotImplementedException("Condition Type not implemneted: " + Condition.GetType().Name);
+            }
+        }
+
+        internal virtual Boolean MatchQuery(Model.Query Query)
+        {
+            if (this.Superceded == -1)
+            {
+                if (Query.Condition != null)
+                {
+                    return this.MatchCondition(Query.Condition);
+                }
+                else
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        protected virtual void WriteItemAttributes(XmlDocument doc, XmlElement item)
+        {
+            XmlAttribute itemtype = doc.CreateAttribute("ItemType");
+            itemtype.Value = this.ItemType.Name;
+            item.Attributes.Append(itemtype);
+
+            XmlAttribute itemid = doc.CreateAttribute("ItemID");
+            itemid.Value = this.ItemID.ToString();
+            item.Attributes.Append(itemid);
+
+            XmlAttribute branchid = doc.CreateAttribute("BranchID");
+            branchid.Value = this.BranchID.ToString();
+            item.Attributes.Append(branchid);
+
+            XmlAttribute versionid = doc.CreateAttribute("VersionID");
+            versionid.Value = this.VersionID.ToString();
+            item.Attributes.Append(versionid);
+
+            XmlAttribute branched = doc.CreateAttribute("Branched");
+            branched.Value = this.Branched.ToString();
+            item.Attributes.Append(branched);
+
+            XmlAttribute versioned = doc.CreateAttribute("Versioned");
+            versioned.Value = this.Versioned.ToString();
+            item.Attributes.Append(versioned);
+
+            XmlAttribute superceded = doc.CreateAttribute("Superceded");
+            superceded.Value = this.Superceded.ToString();
+            item.Attributes.Append(superceded);
+        }
+
+        protected virtual String FileSuffix
+        {
+            get
+            {
+                return "item";
+            }
+        }
+
+        internal void Write(DirectoryInfo Directory)
+        {
+            XmlDocument doc = new XmlDocument();
+            XmlNode docNode = doc.CreateXmlDeclaration("1.0", "UTF-8", null);
+            doc.AppendChild(docNode);
+
+            XmlElement item = doc.CreateElement("Item");
+            doc.AppendChild(item);
+
+            this.WriteItemAttributes(doc, item);
+
+            XmlElement properties = doc.CreateElement("Properties");
+            item.AppendChild(properties);
+
+            foreach(Property prop in this.Properties)
+            {
+                XmlElement property = doc.CreateElement("Property");
+                properties.AppendChild(property);
+
+                XmlAttribute name = doc.CreateAttribute("Name");
+                name.Value = prop.PropertyType.Name;
+                property.Attributes.Append(name);
+
+                XmlAttribute value = doc.CreateAttribute("Value");
+                property.Attributes.Append(value);
+
+                if (prop.Object != null)
+                {
+                    switch (prop.PropertyType.Type)
+                    {
+                        case Model.PropertyTypeValues.DateTime:
+                            value.Value = ((DateTime)prop.Object).ToString(DateFormat);
+                            break;
+                        case Model.PropertyTypeValues.Double:
+                        case Model.PropertyTypeValues.String:
+                        case Model.PropertyTypeValues.Item:
+                            value.Value = prop.Object.ToString();
+                            break;
+                        default:
+                            throw new NotImplementedException();
+                    }
+                }
+            }
+
+            doc.Save(Directory.FullName + "\\" + this.VersionID + "." + this.FileSuffix + ".xml");
+        }
+
+        protected virtual void ReadItemAttributes(XmlDocument doc, XmlNode item)
+        {
+            this.ItemType = this.Session.ItemType(item.Attributes["ItemType"].Value);
+            this.ItemID = Guid.Parse(item.Attributes["ItemID"].Value);
+            this.BranchID = Guid.Parse(item.Attributes["BranchID"].Value);
+            this.VersionID = Guid.Parse(item.Attributes["VersionID"].Value);
+            this.Branched = Int64.Parse(item.Attributes["Branched"].Value);
+            this.Versioned = Int64.Parse(item.Attributes["Versioned"].Value);
+            this.Superceded = Int64.Parse(item.Attributes["Superceded"].Value);
+        }
+
+        private void Read(FileInfo XMLFile)
+        {
+            // Load XML
+            XmlDocument doc = new XmlDocument();
+            doc.Load(XMLFile.FullName);
+            
+            // Get Item Node
+            XmlNode item = doc.SelectSingleNode("Item");
+
+            // Load Item Attributes
+            this.ReadItemAttributes(doc, item);
+
+            // Load Properties
+            this._properties = new Dictionary<Model.PropertyType, Property>();
+
+            XmlNode properties = item.SelectSingleNode("Properties");
+
+            foreach(XmlNode property in properties.ChildNodes)
+            {
+                Model.PropertyType proptype = this.ItemType.PropertyType(property.Attributes["Name"].Value);
+                Object value = null;
+
+                if (property.Attributes["Value"].Value != null)
+                {
+                    switch (proptype.Type)
+                    {
+                        case Model.PropertyTypeValues.DateTime:
+                            value = DateTime.Parse(property.Attributes["Value"].Value);
+                            break;
+
+                        case Model.PropertyTypeValues.Double:
+                            value = Double.Parse(property.Attributes["Value"].Value);
+                            break;
+
+                        case Model.PropertyTypeValues.Item:
+                            value = Guid.Parse(property.Attributes["Value"].Value);
+                            break;
+
+                        case Model.PropertyTypeValues.String:
+                            value = property.Attributes["Value"].Value;
+                            break;
+                    }
+                }
+                
+                this._properties[proptype] = new Property(this, proptype, value);
+            }
+        }
+
+        internal Item(Session Session, Database.IItem Item)
         {
             this._properties = new Dictionary<Model.PropertyType, Property>();
             this.Session = Session;
+            this.ItemType = Item.ItemType;
+            this.ItemID = Item.ItemID;
+            this.BranchID = Item.BranchID;
+            this.VersionID = Item.VersionID;
+            this.Branched = Item.Branched;
+            this.Versioned = Item.Versioned;
+            this.Superceded = Item.Superceded;
+
+            foreach(Database.IProperty prop in Item.Properties)
+            {
+                this._properties[prop.PropertyType] = new Property(this, prop.PropertyType, prop.Object);
+            }
         }
 
+        internal Item(Session Session, FileInfo XMLFile)
+        {
+            this.Session = Session;
+            this.Read(XMLFile);
+        }
     }
 }

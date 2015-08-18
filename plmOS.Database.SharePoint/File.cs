@@ -27,13 +27,28 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace plmOS.Database.SharePoint
 {
     public class File : Item, Database.IFile
     {
-        internal File(Session Session)
-            : base(Session)
+        protected override String FileSuffix
+        {
+            get
+            {
+                return "file";
+            }
+        }
+
+        internal File(Session Session, Database.IFile File)
+            : base(Session, File)
+        {
+
+        }
+
+        internal File(Session Session, FileInfo XMLFile)
+            : base(Session, XMLFile)
         {
 
         }

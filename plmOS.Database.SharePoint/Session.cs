@@ -29,6 +29,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using Microsoft.SharePoint.Client;
+using System.Threading;
 
 namespace plmOS.Database.SharePoint
 {
@@ -168,7 +169,7 @@ namespace plmOS.Database.SharePoint
 
         public String Username { get; private set; }
 
-        public String Password { get; private set; }
+        public System.Security.SecureString Password { get; private set; }
 
         private DirectoryInfo _localCache;
         public DirectoryInfo LocalCache 
@@ -209,46 +210,8 @@ namespace plmOS.Database.SharePoint
 
         internal DirectoryInfo LocalVaultFolder { get; private set; }
 
-        internal ClientContext SPContext { get; private set; }
-
-        internal Folder SPRootFolder { get; private set; }
-
-        private void Login()
-        {
-            // Create Secure Password
-            System.Security.SecureString SecurePassword = new System.Security.SecureString();
-
-            foreach (char c in this.Password.ToCharArray())
-            {
-                SecurePassword.AppendChar(c);
-            }
-
-            // Connect to SharePoint
-            this.SPContext = new ClientContext(this.URL.Scheme + "://" + this.URL.Host);
-            this.SPContext.Credentials = new SharePointOnlineCredentials(this.Username, SecurePassword);
-
-            // Open Base Folder
-            Folder basefolder = this.SPContext.Web.GetFolderByServerRelativeUrl(this.URL.AbsolutePath);
-            this.SPContext.Load(basefolder);
-            this.SPContext.ExecuteQuery(); 
-
-            try
-            {
-                // Ensure SPRootFolder Exists
-                this.SPRootFolder = basefolder.Folders.GetByUrl("Database");
-                this.SPContext.Load(this.SPRootFolder);
-                this.SPContext.ExecuteQuery();
-            }
-            catch (Microsoft.SharePoint.Client.ServerException)
-            {
-                // CreateSPRoot Folder
-                this.SPRootFolder = basefolder.Folders.Add("Database");
-                this.SPContext.Load(this.SPRootFolder);
-                this.SPContext.ExecuteQuery();
-            }
-        }
-
         private List<Int64> Loaded;
+
         private void Load()
         {
             foreach (DirectoryInfo transactiondir in this.LocalRootFolder.GetDirectories())
@@ -288,16 +251,215 @@ namespace plmOS.Database.SharePoint
             }
         }
 
+        private ClientContext CreateContext()
+        {
+            // Create SharePoint Context
+            ClientContext SPContext = new ClientContext(this.URL.Scheme + "://" + this.URL.Host);
+            SPContext.Credentials = new SharePointOnlineCredentials(this.Username, this.Password);
+            return SPContext;
+        }
+
+        private Folder OpenBaseFolder(ClientContext Context)
+        {
+            // Open Base Folder
+            Folder SPBaseFolder = Context.Web.GetFolderByServerRelativeUrl(this.URL.AbsolutePath);
+            Context.Load(SPBaseFolder);
+            Context.ExecuteQuery();
+            return SPBaseFolder;
+        }
+
+        private Object folderlock = new Object();
+
+        private Folder OpenFolder(ClientContext Context, Folder BaseFolder, String Name)
+        {
+            lock (this.folderlock)
+            {
+                Folder SPRootFolder = null;
+
+                try
+                {
+                    // Ensure SPRootFolder Exists
+                    SPRootFolder = BaseFolder.Folders.GetByUrl(Name);
+                    Context.Load(SPRootFolder);
+                    Context.ExecuteQuery();
+                }
+                catch (Microsoft.SharePoint.Client.ServerException)
+                {
+                    // CreateSPRoot Folder
+                    SPRootFolder = BaseFolder.Folders.Add(Name);
+                    Context.Load(SPRootFolder);
+                    Context.ExecuteQuery();
+                }
+
+                return SPRootFolder;
+            }
+        }
+
+        private Thread UploadThread;
+
+        private List<Int64> Uploaded;
+
+        private void Upload()
+        {
+            // Open SharePoint Context
+            ClientContext SPContext = this.CreateContext();
+
+            // Open Base Folder
+            Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
+
+            // Open Root Folder
+            Folder SPRootFolder = this.OpenFolder(SPContext, SPBaseFolder, "Database");
+
+            // Open Vault Folder
+            Folder SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");
+
+            while(true)
+            {
+                foreach (DirectoryInfo transactiondir in this.LocalRootFolder.GetDirectories())
+                {
+                    Int64 transactiondate = -1;
+
+                    if (Int64.TryParse(transactiondir.Name, out transactiondate))
+                    {
+                        if (!Uploaded.Contains(transactiondate))
+                        {
+                            FileInfo committed = new FileInfo(transactiondir.FullName + "\\committed");
+
+                            if (committed.Exists)
+                            {
+                                // Open Transaction Folder on SharePoint
+                                Folder SPTransactionFolder = this.OpenFolder(SPContext, SPRootFolder, transactiondate.ToString());
+                                SPContext.Load(SPTransactionFolder.Files);
+                                SPContext.ExecuteQuery();
+
+                                Boolean committedexists = false;
+
+                                foreach (Microsoft.SharePoint.Client.File spfile in SPTransactionFolder.Files)
+                                {
+                                    if (spfile.Name == "committed")
+                                    {
+                                        committedexists = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!committedexists)
+                                {
+                                    // Upload XML and Vault files exist on SharePoint
+                                    foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
+                                    {
+                                        Boolean spfileexists = false;
+
+                                        foreach (Microsoft.SharePoint.Client.File spfile in SPTransactionFolder.Files)
+                                        {
+                                            if (spfile.Name == xmlfile.Name)
+                                            {
+                                                spfileexists = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if (!spfileexists)
+                                        {
+                                            if (xmlfile.Name.EndsWith(".file.xml"))
+                                            {
+                                                // Upload Vault File
+                                                FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + xmlfile.Name.Replace(".file.xml", ".dat"));
+
+                                                if (vaultfile.Exists)
+                                                {
+                                                    using (FileStream sr = System.IO.File.OpenRead(vaultfile.FullName))
+                                                    {
+                                                        Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPVaultFolder.ServerRelativeUrl + "/" + vaultfile.Name, sr, true);
+                                                    }
+                                                }
+                                            }
+
+                                            // Upload XML File
+                                            using (FileStream sr = System.IO.File.OpenRead(xmlfile.FullName))
+                                            {
+                                                Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPTransactionFolder.ServerRelativeUrl + "/" + xmlfile.Name, sr, true);
+                                            }
+                                        }
+                                    }
+
+                                    // Upload Commited File
+                                    using (FileStream sr = System.IO.File.OpenRead(committed.FullName))
+                                    {
+                                        Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPTransactionFolder.ServerRelativeUrl + "/" + committed.Name, sr, true);
+                                    }
+                                }
+
+                                this.Uploaded.Add(transactiondate);
+                            }
+                        }
+                    }
+                }
+
+                Thread.Sleep(1000);
+            }
+        }
+
+        private Thread DownloadThread;
+
+        private List<Int64> Downloaded;
+
+        private void Download()
+        {
+            // Open SharePoint Context
+            ClientContext SPContext = this.CreateContext();
+
+            // Open Base Folder
+            Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
+
+            // Open Root Folder
+            Folder SPRootFolder = this.OpenFolder(SPContext, SPBaseFolder, "Database");
+
+            // Open Vault Folder
+            Folder SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");
+
+            while (true)
+            {
+
+                Thread.Sleep(1000);
+            }
+        }
+
+        public void Dispose()
+        {
+
+        }
+
         public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache)
         {
             this.ItemTypeCache = new Dictionary<string, Model.ItemType>();
             this.ItemCache = new Dictionary<Model.ItemType, Dictionary<Guid, Item>>();
             this.Loaded = new List<Int64>();
+            this.Uploaded = new List<Int64>();
+            this.Downloaded = new List<Int64>();
 
             this.URL = URL;
             this.Username = Username;
-            this.Password = Password;
+
+            // Store Secure Password
+            this.Password = new System.Security.SecureString();
+
+            foreach (char c in Password.ToCharArray())
+            {
+                this.Password.AppendChar(c);
+            }
+
             this.LocalCache = LocalCache;
+
+            // Start Upload
+            this.UploadThread = new Thread(this.Upload);
+            this.UploadThread.IsBackground = true;
+            this.UploadThread.Start();
+
+            // Start Download
+            this.DownloadThread = new Thread(this.Download);
+            this.DownloadThread.IsBackground = true;
+            this.DownloadThread.Start();
         }
     }
 }

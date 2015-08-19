@@ -173,22 +173,22 @@ namespace plmOS.Database.SharePoint
 
         public System.Security.SecureString Password { get; private set; }
 
-        private Int32 _syncRetry;
-        public Int32 SyncRetry
+        private Int32 _syncDelay;
+        public Int32 SyncDelay
         {
             get
             {
-                return this._syncRetry;
+                return this._syncDelay;
             }
             private set
             {
                 if (value < 1)
                 {
-                    this._syncRetry = 1;
+                    this._syncDelay = 1;
                 }
                 else
                 {
-                    this._syncRetry = value;
+                    this._syncDelay = value;
                 }
             }
         }
@@ -418,7 +418,7 @@ namespace plmOS.Database.SharePoint
                     }
                 }
 
-                Thread.Sleep(this.SyncRetry * 1000);
+                Thread.Sleep(this.SyncDelay * 1000);
             }
         }
 
@@ -548,7 +548,7 @@ namespace plmOS.Database.SharePoint
                     }
                 }
 
-                Thread.Sleep(this.SyncRetry * 1000);
+                Thread.Sleep(this.SyncDelay * 1000);
             }
         }
 
@@ -557,7 +557,7 @@ namespace plmOS.Database.SharePoint
 
         }
 
-        public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache, Int32 SyncRetry)
+        public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache, Int32 SyncDelay)
         {
             this.ItemTypeCache = new Dictionary<string, Model.ItemType>();
             this.ItemCache = new Dictionary<Model.ItemType, Dictionary<Guid, Item>>();
@@ -577,7 +577,7 @@ namespace plmOS.Database.SharePoint
             }
 
             this.LocalCache = LocalCache;
-            this.SyncRetry = SyncRetry;
+            this.SyncDelay = SyncDelay;
 
             // Start Upload
             this.UploadThread = new Thread(this.Upload);

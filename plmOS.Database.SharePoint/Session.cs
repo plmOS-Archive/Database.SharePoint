@@ -35,6 +35,8 @@ namespace plmOS.Database.SharePoint
 {
     public class Session : Database.ISession
     {
+        const int buffersize = 256;
+
         private Dictionary<String, Model.ItemType> ItemTypeCache;
 
         internal Model.ItemType ItemType(String Name)
@@ -170,6 +172,26 @@ namespace plmOS.Database.SharePoint
         public String Username { get; private set; }
 
         public System.Security.SecureString Password { get; private set; }
+
+        private Int32 _syncRetry;
+        public Int32 SyncRetry
+        {
+            get
+            {
+                return this._syncRetry;
+            }
+            private set
+            {
+                if (value < 1)
+                {
+                    this._syncRetry = 1;
+                }
+                else
+                {
+                    this._syncRetry = value;
+                }
+            }
+        }
 
         private DirectoryInfo _localCache;
         public DirectoryInfo LocalCache 
@@ -396,7 +418,7 @@ namespace plmOS.Database.SharePoint
                     }
                 }
 
-                Thread.Sleep(1000);
+                Thread.Sleep(this.SyncRetry * 1000);
             }
         }
 
@@ -406,6 +428,9 @@ namespace plmOS.Database.SharePoint
 
         private void Download()
         {
+            byte[] buffer = new byte[buffersize];
+            int sizeread = 0;
+
             // Open SharePoint Context
             ClientContext SPContext = this.CreateContext();
 
@@ -420,8 +445,110 @@ namespace plmOS.Database.SharePoint
 
             while (true)
             {
+                // Get Listing of Folders on SharePoint
+                SPContext.Load(SPRootFolder.Folders);
+                SPContext.ExecuteQuery();
 
-                Thread.Sleep(1000);
+                foreach(Folder transactionfolder in SPRootFolder.Folders)
+                {
+                    Int64 transactiondate = -1;
+
+                    if (Int64.TryParse(transactionfolder.Name, out transactiondate))
+                    {
+                        if (!this.Downloaded.Contains(transactiondate))
+                        {
+                            // Check if Transaction Folder Exists in Local Cache
+                            Boolean downloadneeded = true;
+
+                            DirectoryInfo localtransactionfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
+                            FileInfo committed = new FileInfo(localtransactionfolder.FullName + "\\committed");
+
+                            if (localtransactionfolder.Exists)
+                            {
+                                if (committed.Exists)
+                                {
+                                    downloadneeded = false;
+                                }
+                            }
+                            else
+                            {
+                                localtransactionfolder.Create();
+                            }
+
+                            if (downloadneeded)
+                            {
+                                // Load File List from SharePoint
+                                SPContext.Load(transactionfolder.Files);
+                                SPContext.ExecuteQuery();
+
+                                // Check that committed file exists on SharePoint
+                                Boolean spcommittedexists = false;
+
+                                foreach (Microsoft.SharePoint.Client.File spfile in transactionfolder.Files)
+                                {
+                                    if (spfile.Name == "committed")
+                                    {
+                                        spcommittedexists = true;
+                                        break;
+                                    }
+                                }
+
+                                if (spcommittedexists)
+                                {
+                                    foreach (Microsoft.SharePoint.Client.File spfile in transactionfolder.Files)
+                                    {
+                                        if (spfile.Name != "committed")
+                                        {
+                                            if (spfile.Name.EndsWith(".file.xml"))
+                                            {
+                                                // Download File from Vault
+                                                FileInfo localvault = new FileInfo(this.LocalVaultFolder.FullName + "\\" + spfile.Name.Replace(".file.xml", ".dat"));
+                                                Microsoft.SharePoint.Client.FileInformation vaultfileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, SPVaultFolder.ServerRelativeUrl + "/" + localvault.Name);
+
+                                                using (FileStream sw = System.IO.File.OpenWrite(localvault.FullName))
+                                                {
+                                                    using (vaultfileInfo.Stream)
+                                                    {
+                                                        while((sizeread = vaultfileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
+                                                        {
+                                                            sw.Write(buffer, 0, sizeread);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Download XML File
+                                            FileInfo localxml = new FileInfo(localtransactionfolder.FullName + "\\" + spfile.Name);
+                                            Microsoft.SharePoint.Client.FileInformation fileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, spfile.ServerRelativeUrl);
+
+                                            using (FileStream sw = System.IO.File.OpenWrite(localxml.FullName))
+                                            {
+                                                using (fileInfo.Stream)
+                                                {
+                                                    while ((sizeread = fileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
+                                                    {
+                                                        sw.Write(buffer, 0, sizeread);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Create Local committed
+                                    committed.Create();
+
+                                    this.Downloaded.Add(transactiondate);
+                                }
+                            }
+                            else
+                            {
+                                this.Downloaded.Add(transactiondate);
+                            }
+                        }
+                    }
+                }
+
+                Thread.Sleep(this.SyncRetry * 1000);
             }
         }
 
@@ -430,7 +557,7 @@ namespace plmOS.Database.SharePoint
 
         }
 
-        public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache)
+        public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache, Int32 SyncRetry)
         {
             this.ItemTypeCache = new Dictionary<string, Model.ItemType>();
             this.ItemCache = new Dictionary<Model.ItemType, Dictionary<Guid, Item>>();
@@ -450,6 +577,7 @@ namespace plmOS.Database.SharePoint
             }
 
             this.LocalCache = LocalCache;
+            this.SyncRetry = SyncRetry;
 
             // Start Upload
             this.UploadThread = new Thread(this.Upload);

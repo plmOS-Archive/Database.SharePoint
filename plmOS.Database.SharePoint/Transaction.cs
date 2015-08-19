@@ -57,6 +57,10 @@ namespace plmOS.Database.SharePoint
             {
                 item.Write(this.Directory);
             }
+
+            // Create Committed File
+            FileInfo committed = new FileInfo(this.Directory.FullName + "\\committed");
+            committed.Create();
         }
 
 

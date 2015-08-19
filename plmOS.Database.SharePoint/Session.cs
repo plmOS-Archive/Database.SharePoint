@@ -93,6 +93,8 @@ namespace plmOS.Database.SharePoint
 
         public IItem Get(Model.ItemType ItemType, Guid BranchID)
         {
+            this.Load();
+
             if (this.ItemCache.ContainsKey(ItemType))
             {
                 foreach (Item item in this.ItemCache[ItemType].Values)
@@ -246,38 +248,43 @@ namespace plmOS.Database.SharePoint
             }
         }
 
-        private Boolean Loaded;
+        private List<Int64> Loaded;
         private void Load()
         {
-            if (!this.Loaded)
+            foreach (DirectoryInfo transactiondir in this.LocalRootFolder.GetDirectories())
             {
-                foreach (DirectoryInfo transactiondir in this.LocalRootFolder.GetDirectories())
+                Int64 transactiondate = -1;
+
+                if (Int64.TryParse(transactiondir.Name, out transactiondate))
                 {
-                    this.LoadTransaction(transactiondir);
+                    if (!Loaded.Contains(transactiondate))
+                    {
+                        FileInfo committed = new FileInfo(transactiondir.FullName + "\\committed");
+
+                        if (committed.Exists)
+                        {
+                            foreach (FileInfo xmlfile in transactiondir.GetFiles("*.item.xml"))
+                            {
+                                Item item = new Item(this, xmlfile);
+                                this.AddItemToCache(item);
+                            }
+
+                            foreach (FileInfo xmlfile in transactiondir.GetFiles("*.file.xml"))
+                            {
+                                File item = new File(this, xmlfile);
+                                this.AddItemToCache(item);
+                            }
+
+                            foreach (FileInfo xmlfile in transactiondir.GetFiles("*.relationship.xml"))
+                            {
+                                Relationship item = new Relationship(this, xmlfile);
+                                this.AddItemToCache(item);
+                            }
+
+                            this.Loaded.Add(transactiondate);
+                        }
+                    }
                 }
-
-                this.Loaded = true;
-            }
-        }
-
-        internal void LoadTransaction(DirectoryInfo TransactionDirectory)
-        {
-            foreach (FileInfo xmlfile in TransactionDirectory.GetFiles("*.item.xml"))
-            {
-                Item item = new Item(this, xmlfile);
-                this.AddItemToCache(item);
-            }
-
-            foreach (FileInfo xmlfile in TransactionDirectory.GetFiles("*.file.xml"))
-            {
-                File item = new File(this, xmlfile);
-                this.AddItemToCache(item);
-            }
-
-            foreach (FileInfo xmlfile in TransactionDirectory.GetFiles("*.relationship.xml"))
-            {
-                Relationship item = new Relationship(this, xmlfile);
-                this.AddItemToCache(item);
             }
         }
 
@@ -285,11 +292,12 @@ namespace plmOS.Database.SharePoint
         {
             this.ItemTypeCache = new Dictionary<string, Model.ItemType>();
             this.ItemCache = new Dictionary<Model.ItemType, Dictionary<Guid, Item>>();
+            this.Loaded = new List<Int64>();
+
             this.URL = URL;
             this.Username = Username;
             this.Password = Password;
             this.LocalCache = LocalCache;
-            this.Loaded = false;
         }
     }
 }

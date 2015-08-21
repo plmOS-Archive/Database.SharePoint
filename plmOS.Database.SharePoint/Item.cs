@@ -78,7 +78,8 @@ namespace plmOS.Database.SharePoint
             {
                 case "Property":
 
-                    Property property = (Property)this.Property(((Model.Conditions.Property)Condition).PropertyType);
+                    Model.PropertyType proptype = this.ItemType.PropertyType(((Model.Conditions.Property)Condition).Name);
+                    Property property = (Property)this.Property(proptype);
 
                     switch(property.PropertyType.Type)
                     {

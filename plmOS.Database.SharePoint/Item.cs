@@ -85,7 +85,7 @@ namespace plmOS.Database.SharePoint
                     {
                         case Model.PropertyTypeValues.String:
                             String propvalue = (String)property.Object;
-                            String conditionvalue = (String)((Model.Conditions.Property)Condition).Value;
+                            String conditionvalue = (String)(((Model.Conditions.Property)Condition).Value);
 
                             switch (((Model.Conditions.Property)Condition).Operator)
                             {
@@ -208,6 +208,7 @@ namespace plmOS.Database.SharePoint
                         case Model.PropertyTypeValues.Double:
                         case Model.PropertyTypeValues.String:
                         case Model.PropertyTypeValues.Item:
+                        case Model.PropertyTypeValues.List:
                             value.Value = prop.Object.ToString();
                             break;
                         default:

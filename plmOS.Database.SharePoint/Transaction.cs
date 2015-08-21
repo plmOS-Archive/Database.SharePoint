@@ -47,10 +47,12 @@ namespace plmOS.Database.SharePoint
 
         internal DirectoryInfo Directory { get; private set; }
 
+        internal Int64 ComittedTime { get; private set; }
+
         public void Commit()
         {
-            Int64 committime = DateTime.UtcNow.Ticks;
-            this.Directory = new DirectoryInfo(this.Session.LocalRootFolder.FullName + "\\" + committime.ToString());
+            this.ComittedTime = DateTime.UtcNow.Ticks;
+            this.Directory = new DirectoryInfo(this.Session.LocalRootFolder.FullName + "\\" + this.ComittedTime.ToString());
             this.Directory.Create();
 
             foreach (Item item in this.Items)
@@ -60,7 +62,14 @@ namespace plmOS.Database.SharePoint
 
             // Create Committed File
             FileInfo committed = new FileInfo(this.Directory.FullName + "\\committed");
-            committed.Create();
+            
+            using(FileStream sr = new FileStream(committed.FullName, FileMode.Create))
+            {
+
+            }
+
+            // Add to Upload Queue
+            this.Session.AddToUploadQueue(this);
         }
 
 

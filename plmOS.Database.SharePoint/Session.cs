@@ -211,7 +211,7 @@ namespace plmOS.Database.SharePoint
                 }
 
                 // Set Local Root Folder and ensure exists
-                this.LocalRootFolder = new DirectoryInfo(this._localCache.FullName + "\\" + this.URL.Host + this.URL.AbsolutePath + "\\Database");
+                this.LocalRootFolder = new DirectoryInfo(this._localCache.FullName + "\\" + this.URL.Host + this.URL.AbsolutePath.Replace('/', '\\') + "\\Database");
 
                 if (!this.LocalRootFolder.Exists)
                 {

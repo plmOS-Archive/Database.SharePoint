@@ -38,42 +38,42 @@ namespace plmOS.Database.SharePoint
     {
         const int buffersize = 256;
 
-        private object InitialisedLock = new object();
-        private volatile Boolean _initialised;
-        public Boolean Initialised
+        private object ReadingLock = new object();
+        private volatile Boolean _reading;
+        public Boolean Reading
         {
             get
             {
-                lock (this.InitialisedLock)
+                lock (this.ReadingLock)
                 {
-                    return this._initialised;
+                    return this._reading;
                 }
             }
             private set
             {
-                lock (this.InitialisedLock)
+                lock (this.ReadingLock)
                 {
-                    this._initialised = value;
+                    this._reading = value;
                 }
             }
         }
 
-        private object SavingLock = new object();
-        private volatile Boolean _saving;
-        public Boolean Saving
+        private object WritingLock = new object();
+        private volatile Boolean _wrting;
+        public Boolean Writing
         {
             get
             {
-                lock (this.SavingLock)
+                lock (this.WritingLock)
                 {
-                    return this._saving;
+                    return this._wrting;
                 }
             }
             internal set
             {
-                lock (this.SavingLock)
+                lock (this.WritingLock)
                 {
-                    this._saving = value;
+                    this._wrting = value;
                 }
             }
         }
@@ -396,7 +396,7 @@ namespace plmOS.Database.SharePoint
             {
                 while (this.UploadQueue.Count > 0)
                 {
-                    this.Saving = true;
+                    this.Writing = true;
                     Int64 transactiondate = -1;
 
                     if (this.UploadQueue.TryPeek(out transactiondate))
@@ -426,7 +426,7 @@ namespace plmOS.Database.SharePoint
                             if (!committedexists)
                             {
                                 // Upload XML and Vault files to SharePoint
-                                this.Saving = true;
+                                this.Writing = true;
 
                                 foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
                                 {
@@ -478,7 +478,7 @@ namespace plmOS.Database.SharePoint
                     }
                 }
 
-                this.Saving = false;
+                this.Writing = false;
 
                 // Sleep
                 Thread.Sleep(100);
@@ -611,8 +611,8 @@ namespace plmOS.Database.SharePoint
                     }
                 }
 
-                // Set Initialised to true once done one Sync
-                this.Initialised = true;
+                // Set Reading to false once done one Sync
+                this.Reading = false;
 
                 Thread.Sleep(this.SyncDelay * 1000);
             }
@@ -645,8 +645,8 @@ namespace plmOS.Database.SharePoint
             this.LocalCache = LocalCache;
             this.SyncDelay = SyncDelay;
 
-            this.Initialised = false;
-            this.Saving = true;
+            this.Reading = true;
+            this.Writing = true;
 
             // Start Upload
             this.UploadThread = new Thread(this.Upload);

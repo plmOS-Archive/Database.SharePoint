@@ -258,7 +258,12 @@ namespace plmOS.Database.SharePoint
                     switch (proptype.Type)
                     {
                         case Model.PropertyTypeValues.DateTime:
-                            value = DateTime.Parse(property.Attributes["Value"].Value);
+
+                            if (!String.IsNullOrEmpty(property.Attributes["Value"].Value))
+                            {
+                                value = DateTime.Parse(property.Attributes["Value"].Value);
+                            }
+
                             break;
 
                         case Model.PropertyTypeValues.Double:

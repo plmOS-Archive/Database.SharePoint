@@ -78,6 +78,36 @@ namespace plmOS.Database.SharePoint
             }
         }
 
+        private object InitialisedLock = new object();
+        private volatile Boolean _initialised;
+        public Boolean Initialised
+        {
+            get
+            {
+                lock(this.InitialisedLock)
+                {
+                    return this._initialised;
+                }
+            }
+            private set
+            {
+                lock (this.InitialisedLock)
+                {
+                    this._initialised = value;
+
+                    if (this._initialised)
+                    {
+                        if (this.InitialseCompleted != null)
+                        {
+                            this.InitialseCompleted(this, new EventArgs());
+                        }
+                    }
+                }
+            }
+        }
+
+        public event EventHandler InitialseCompleted;
+
         private Dictionary<String, Model.ItemType> ItemTypeCache;
 
         internal Model.ItemType ItemType(String Name)
@@ -520,6 +550,8 @@ namespace plmOS.Database.SharePoint
                     {
                         if (!this.Downloaded.Contains(transactiondate))
                         {
+                            this.Reading = true;
+
                             // Check if Transaction Folder Exists in Local Cache
                             Boolean downloadneeded = true;
 
@@ -611,7 +643,13 @@ namespace plmOS.Database.SharePoint
                     }
                 }
 
-                // Set Reading to false once done one Sync
+                // Set Initialised to true once done one Sync
+                if (!this.Initialised)
+                {
+                    this.Initialised = true;
+                }
+
+                // Reset Reading Flag
                 this.Reading = false;
 
                 Thread.Sleep(this.SyncDelay * 1000);
@@ -645,8 +683,9 @@ namespace plmOS.Database.SharePoint
             this.LocalCache = LocalCache;
             this.SyncDelay = SyncDelay;
 
-            this.Reading = true;
-            this.Writing = true;
+            this.Reading = false;
+            this.Writing = false;
+            this.Initialised = false;
 
             // Start Upload
             this.UploadThread = new Thread(this.Upload);

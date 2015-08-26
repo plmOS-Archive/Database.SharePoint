@@ -209,6 +209,7 @@ namespace plmOS.Database.SharePoint
                         case Model.PropertyTypeValues.String:
                         case Model.PropertyTypeValues.Item:
                         case Model.PropertyTypeValues.List:
+                        case Model.PropertyTypeValues.Boolean:
                             value.Value = prop.Object.ToString();
                             break;
                         default:
@@ -277,6 +278,17 @@ namespace plmOS.Database.SharePoint
                         case Model.PropertyTypeValues.String:
                             value = property.Attributes["Value"].Value;
                             break;
+
+                        case Model.PropertyTypeValues.List:
+                            value = Int32.Parse(property.Attributes["Value"].Value);
+                            break;
+
+                        case Model.PropertyTypeValues.Boolean:
+                            value = Boolean.Parse(property.Attributes["Value"].Value);
+                            break;
+
+                        default:
+                            throw new NotImplementedException("Propertype not implemented: " + proptype.Type.ToString());
                     }
                 }
                 

@@ -203,7 +203,7 @@ namespace plmOS.Database.SharePoint
                     switch (prop.PropertyType.Type)
                     {
                         case Model.PropertyTypeValues.DateTime:
-                            value.Value = ((DateTime)prop.Object).ToString(DateFormat);
+                            value.Value = ((DateTime)prop.Object).ToUniversalTime().ToString(DateFormat);
                             break;
                         case Model.PropertyTypeValues.Double:
                         case Model.PropertyTypeValues.String:
@@ -262,7 +262,7 @@ namespace plmOS.Database.SharePoint
 
                             if (!String.IsNullOrEmpty(property.Attributes["Value"].Value))
                             {
-                                value = DateTime.Parse(property.Attributes["Value"].Value);
+                                value = DateTime.Parse(property.Attributes["Value"].Value).ToLocalTime();
                             }
 
                             break;

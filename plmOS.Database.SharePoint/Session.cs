@@ -491,7 +491,7 @@ namespace plmOS.Database.SharePoint
             // Open Supplier Folder
             Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
 
-            // Open Supplier Folder
+            // Open Project Folder
             Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
 
             // Open Root Folder
@@ -608,8 +608,14 @@ namespace plmOS.Database.SharePoint
             // Open Base Folder
             Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
 
+            // Open Supplier Folder
+            Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
+
+            // Open Project Folder
+            Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
+
             // Open Root Folder
-            Folder SPRootFolder = this.OpenFolder(SPContext, SPBaseFolder, "Database");
+            Folder SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
 
             // Open Vault Folder
             Folder SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");

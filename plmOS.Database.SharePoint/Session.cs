@@ -344,10 +344,82 @@ namespace plmOS.Database.SharePoint
             }
         }
 
+        private static Uri BaseURL(Uri URL)
+        {
+            String full = URL.AbsoluteUri;
+            full = full.TrimEnd(new char[] { '/' });
+            int pos = full.LastIndexOf('/');
+            return new Uri(full.Substring(0, pos));
+        }
+
+        private static String FolderName(Uri URL)
+        {
+            String full = URL.AbsoluteUri;
+            full = full.TrimEnd(new char[] { '/' });
+            int pos = full.LastIndexOf('/');
+            return full.Substring(pos + 1, full.Length - pos - 1);
+        }
+
+        private String _projectID;
+        public String ProjectID
+        {
+            get
+            {
+                if (this._projectID == null)
+                {
+                    this._projectID = FolderName(this.URL);
+                }
+
+                return this._projectID;
+            }
+        }
+
+        private String _supplierID;
+        public String SupplierID
+        {
+            get
+            {
+                if (this._supplierID == null)
+                {
+                    this._supplierID = FolderName(this.SupplierURL);
+                }
+
+                return this._supplierID;
+            }
+        }
+
+        private Uri _supplierURL;
+        public Uri SupplierURL
+        {
+            get
+            {
+                if (this._supplierURL == null)
+                {
+                    this._supplierURL = BaseURL(this.URL);
+                }
+
+                return this._supplierURL;
+            }
+        }
+
+        private Uri _siteURL;
+        public Uri SiteURL
+        {
+            get
+            {
+                if (this._siteURL == null)
+                {
+                    this._siteURL = BaseURL(this.SupplierURL);
+                }
+
+                return this._siteURL;
+            }
+        }
+
         private ClientContext CreateContext()
         {
             // Create SharePoint Context
-            ClientContext SPContext = new ClientContext(this.URL.Scheme + "://" + this.URL.Host);
+            ClientContext SPContext = new ClientContext(this.SiteURL.AbsoluteUri);
             SPContext.Credentials = new SharePointOnlineCredentials(this.Username, this.Password);
             return SPContext;
         }
@@ -355,7 +427,7 @@ namespace plmOS.Database.SharePoint
         private Folder OpenBaseFolder(ClientContext Context)
         {
             // Open Base Folder
-            Folder SPBaseFolder = Context.Web.GetFolderByServerRelativeUrl(this.URL.AbsolutePath);
+            Folder SPBaseFolder = Context.Web.RootFolder;
             Context.Load(SPBaseFolder);
             Context.ExecuteQuery();
             return SPBaseFolder;
@@ -416,8 +488,14 @@ namespace plmOS.Database.SharePoint
             // Open Base Folder
             Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
 
+            // Open Supplier Folder
+            Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
+
+            // Open Supplier Folder
+            Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
+
             // Open Root Folder
-            Folder SPRootFolder = this.OpenFolder(SPContext, SPBaseFolder, "Database");
+            Folder SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
 
             // Open Vault Folder
             Folder SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");

@@ -482,114 +482,131 @@ namespace plmOS.Database.SharePoint
                 }
             }
 
-            // Open SharePoint Context
-            ClientContext SPContext = this.CreateContext();
-
-            // Open Base Folder
-            Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
-
-            // Open Supplier Folder
-            Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
-
-            // Open Project Folder
-            Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
-
-            // Open Root Folder
-            Folder SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
-
-            // Open Vault Folder
-            Folder SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");
+            ClientContext SPContext = null;
+            Folder SPBaseFolder = null;
+            Folder SPSupplierFolder = null;
+            Folder SPProjectFolder = null;
+            Folder SPRootFolder = null;
+            Folder SPVaultFolder = null;
 
             while (true)
             {
-                while (this.UploadQueue.Count > 0)
+                try
                 {
-                    this.Writing = true;
-                    Int64 transactiondate = -1;
-
-                    if (this.UploadQueue.TryPeek(out transactiondate))
+                    if (SPVaultFolder == null)
                     {
-                        DirectoryInfo transactiondir = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
+                        // Open SharePoint Context
+                        SPContext = this.CreateContext();
 
-                        FileInfo committed = new FileInfo(transactiondir.FullName + "\\committed");
+                        // Open Base Folder
+                        SPBaseFolder = this.OpenBaseFolder(SPContext);
 
-                        if (committed.Exists)
+                        // Open Supplier Folder
+                        SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
+
+                        // Open Project Folder
+                        SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
+
+                        // Open Root Folder
+                        SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
+
+                        // Open Vault Folder
+                        SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");
+                    }
+
+                    while (this.UploadQueue.Count > 0)
+                    {
+                        this.Writing = true;
+                        Int64 transactiondate = -1;
+
+                        if (this.UploadQueue.TryPeek(out transactiondate))
                         {
-                            // Open Transaction Folder on SharePoint
-                            Folder SPTransactionFolder = this.OpenFolder(SPContext, SPRootFolder, transactiondate.ToString());
-                            SPContext.Load(SPTransactionFolder.Files);
-                            SPContext.ExecuteQuery();
+                            DirectoryInfo transactiondir = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
 
-                            Boolean committedexists = false;
+                            FileInfo committed = new FileInfo(transactiondir.FullName + "\\committed");
 
-                            foreach (Microsoft.SharePoint.Client.File spfile in SPTransactionFolder.Files)
+                            if (committed.Exists)
                             {
-                                if (spfile.Name == "committed")
+                                // Open Transaction Folder on SharePoint
+                                Folder SPTransactionFolder = this.OpenFolder(SPContext, SPRootFolder, transactiondate.ToString());
+                                SPContext.Load(SPTransactionFolder.Files);
+                                SPContext.ExecuteQuery();
+
+                                Boolean committedexists = false;
+
+                                foreach (Microsoft.SharePoint.Client.File spfile in SPTransactionFolder.Files)
                                 {
-                                    committedexists = true;
-                                    break;
-                                }
-                            }
-
-                            if (!committedexists)
-                            {
-                                // Upload XML and Vault files to SharePoint
-                                this.Writing = true;
-
-                                foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
-                                {
-                                    Boolean spfileexists = false;
-
-                                    foreach (Microsoft.SharePoint.Client.File spfile in SPTransactionFolder.Files)
+                                    if (spfile.Name == "committed")
                                     {
-                                        if (spfile.Name == xmlfile.Name)
-                                        {
-                                            spfileexists = true;
-                                            break;
-                                        }
+                                        committedexists = true;
+                                        break;
                                     }
+                                }
 
-                                    if (!spfileexists)
+                                if (!committedexists)
+                                {
+                                    // Upload XML and Vault files to SharePoint
+                                    this.Writing = true;
+
+                                    foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
                                     {
-                                        if (xmlfile.Name.EndsWith(".file.xml"))
-                                        {
-                                            // Upload Vault File
-                                            FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + xmlfile.Name.Replace(".file.xml", ".dat"));
+                                        Boolean spfileexists = false;
 
-                                            if (vaultfile.Exists)
+                                        foreach (Microsoft.SharePoint.Client.File spfile in SPTransactionFolder.Files)
+                                        {
+                                            if (spfile.Name == xmlfile.Name)
                                             {
-                                                using (FileStream sr = System.IO.File.OpenRead(vaultfile.FullName))
-                                                {
-                                                    Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPVaultFolder.ServerRelativeUrl + "/" + vaultfile.Name, sr, true);
-                                                }
+                                                spfileexists = true;
+                                                break;
                                             }
                                         }
 
-                                        // Upload XML File
-                                        using (FileStream sr = System.IO.File.OpenRead(xmlfile.FullName))
+                                        if (!spfileexists)
                                         {
-                                            Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPTransactionFolder.ServerRelativeUrl + "/" + xmlfile.Name, sr, true);
+                                            if (xmlfile.Name.EndsWith(".file.xml"))
+                                            {
+                                                // Upload Vault File
+                                                FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + xmlfile.Name.Replace(".file.xml", ".dat"));
+
+                                                if (vaultfile.Exists)
+                                                {
+                                                    using (FileStream sr = System.IO.File.OpenRead(vaultfile.FullName))
+                                                    {
+                                                        Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPVaultFolder.ServerRelativeUrl + "/" + vaultfile.Name, sr, true);
+                                                    }
+                                                }
+                                            }
+
+                                            // Upload XML File
+                                            using (FileStream sr = System.IO.File.OpenRead(xmlfile.FullName))
+                                            {
+                                                Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPTransactionFolder.ServerRelativeUrl + "/" + xmlfile.Name, sr, true);
+                                            }
                                         }
+                                    }
+
+                                    // Upload Commited File
+                                    using (FileStream sr = System.IO.File.OpenRead(committed.FullName))
+                                    {
+                                        Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPTransactionFolder.ServerRelativeUrl + "/" + committed.Name, sr, true);
                                     }
                                 }
 
-                                // Upload Commited File
-                                using (FileStream sr = System.IO.File.OpenRead(committed.FullName))
-                                {
-                                    Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPTransactionFolder.ServerRelativeUrl + "/" + committed.Name, sr, true);
-                                }
+                                // Completed - remove Transaction from Queue
+                                this.UploadQueue.TryDequeue(out transactiondate);
                             }
-
-                            // Completed - remove Transaction from Queue
-                            this.UploadQueue.TryDequeue(out transactiondate);
                         }
                     }
+
+                    this.Writing = false;
+                }
+                catch(Exception)
+                {
+
                 }
 
-                this.Writing = false;
-
                 // Sleep
-                Thread.Sleep(100);
+                Thread.Sleep(this.SyncDelay * 1000);
             }
         }
 
@@ -602,139 +619,156 @@ namespace plmOS.Database.SharePoint
             byte[] buffer = new byte[buffersize];
             int sizeread = 0;
 
-            // Open SharePoint Context
-            ClientContext SPContext = this.CreateContext();
-
-            // Open Base Folder
-            Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
-
-            // Open Supplier Folder
-            Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
-
-            // Open Project Folder
-            Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
-
-            // Open Root Folder
-            Folder SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
-
-            // Open Vault Folder
-            Folder SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");
+            ClientContext SPContext = null;
+            Folder SPBaseFolder = null;
+            Folder SPSupplierFolder = null;
+            Folder SPProjectFolder = null;
+            Folder SPRootFolder = null;
+            Folder SPVaultFolder = null;
 
             while (true)
             {
-                // Get Listing of Folders on SharePoint
-                SPContext.Load(SPRootFolder.Folders);
-                SPContext.ExecuteQuery();
-
-                foreach(Folder transactionfolder in SPRootFolder.Folders)
+                try
                 {
-                    Int64 transactiondate = -1;
-
-                    if (Int64.TryParse(transactionfolder.Name, out transactiondate))
+                    if (SPVaultFolder == null)
                     {
-                        if (!this.Downloaded.Contains(transactiondate))
+                        // Open SharePoint Context
+                        SPContext = this.CreateContext();
+
+                        // Open Base Folder
+                        SPBaseFolder = this.OpenBaseFolder(SPContext);
+
+                        // Open Supplier Folder
+                        SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
+
+                        // Open Project Folder
+                        SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
+
+                        // Open Root Folder
+                        SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
+
+                        // Open Vault Folder
+                        SPVaultFolder = this.OpenFolder(SPContext, SPRootFolder, "Vault");
+                    }
+
+                    // Get Listing of Folders on SharePoint
+                    SPContext.Load(SPRootFolder.Folders);
+                    SPContext.ExecuteQuery();
+
+                    foreach (Folder transactionfolder in SPRootFolder.Folders)
+                    {
+                        Int64 transactiondate = -1;
+
+                        if (Int64.TryParse(transactionfolder.Name, out transactiondate))
                         {
-                            this.Reading = true;
-
-                            // Check if Transaction Folder Exists in Local Cache
-                            Boolean downloadneeded = true;
-
-                            DirectoryInfo localtransactionfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
-                            FileInfo committed = new FileInfo(localtransactionfolder.FullName + "\\committed");
-
-                            if (localtransactionfolder.Exists)
+                            if (!this.Downloaded.Contains(transactiondate))
                             {
-                                if (committed.Exists)
+                                this.Reading = true;
+
+                                // Check if Transaction Folder Exists in Local Cache
+                                Boolean downloadneeded = true;
+
+                                DirectoryInfo localtransactionfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
+                                FileInfo committed = new FileInfo(localtransactionfolder.FullName + "\\committed");
+
+                                if (localtransactionfolder.Exists)
                                 {
-                                    downloadneeded = false;
-                                }
-                            }
-                            else
-                            {
-                                localtransactionfolder.Create();
-                            }
-
-                            if (downloadneeded)
-                            {
-                                // Load File List from SharePoint
-                                SPContext.Load(transactionfolder.Files);
-                                SPContext.ExecuteQuery();
-
-                                // Check that committed file exists on SharePoint
-                                Boolean spcommittedexists = false;
-
-                                foreach (Microsoft.SharePoint.Client.File spfile in transactionfolder.Files)
-                                {
-                                    if (spfile.Name == "committed")
+                                    if (committed.Exists)
                                     {
-                                        spcommittedexists = true;
-                                        break;
+                                        downloadneeded = false;
                                     }
                                 }
-
-                                if (spcommittedexists)
+                                else
                                 {
+                                    localtransactionfolder.Create();
+                                }
+
+                                if (downloadneeded)
+                                {
+                                    // Load File List from SharePoint
+                                    SPContext.Load(transactionfolder.Files);
+                                    SPContext.ExecuteQuery();
+
+                                    // Check that committed file exists on SharePoint
+                                    Boolean spcommittedexists = false;
+
                                     foreach (Microsoft.SharePoint.Client.File spfile in transactionfolder.Files)
                                     {
-                                        if (spfile.Name != "committed")
+                                        if (spfile.Name == "committed")
                                         {
-                                            if (spfile.Name.EndsWith(".file.xml"))
-                                            {
-                                                // Download File from Vault
-                                                FileInfo localvault = new FileInfo(this.LocalVaultFolder.FullName + "\\" + spfile.Name.Replace(".file.xml", ".dat"));
-                                                Microsoft.SharePoint.Client.FileInformation vaultfileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, SPVaultFolder.ServerRelativeUrl + "/" + localvault.Name);
+                                            spcommittedexists = true;
+                                            break;
+                                        }
+                                    }
 
-                                                using (FileStream sw = System.IO.File.OpenWrite(localvault.FullName))
+                                    if (spcommittedexists)
+                                    {
+                                        foreach (Microsoft.SharePoint.Client.File spfile in transactionfolder.Files)
+                                        {
+                                            if (spfile.Name != "committed")
+                                            {
+                                                if (spfile.Name.EndsWith(".file.xml"))
                                                 {
-                                                    using (vaultfileInfo.Stream)
+                                                    // Download File from Vault
+                                                    FileInfo localvault = new FileInfo(this.LocalVaultFolder.FullName + "\\" + spfile.Name.Replace(".file.xml", ".dat"));
+                                                    Microsoft.SharePoint.Client.FileInformation vaultfileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, SPVaultFolder.ServerRelativeUrl + "/" + localvault.Name);
+
+                                                    using (FileStream sw = System.IO.File.OpenWrite(localvault.FullName))
                                                     {
-                                                        while((sizeread = vaultfileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
+                                                        using (vaultfileInfo.Stream)
+                                                        {
+                                                            while ((sizeread = vaultfileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
+                                                            {
+                                                                sw.Write(buffer, 0, sizeread);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Download XML File
+                                                FileInfo localxml = new FileInfo(localtransactionfolder.FullName + "\\" + spfile.Name);
+                                                Microsoft.SharePoint.Client.FileInformation fileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, spfile.ServerRelativeUrl);
+
+                                                using (FileStream sw = System.IO.File.OpenWrite(localxml.FullName))
+                                                {
+                                                    using (fileInfo.Stream)
+                                                    {
+                                                        while ((sizeread = fileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
                                                         {
                                                             sw.Write(buffer, 0, sizeread);
                                                         }
                                                     }
                                                 }
                                             }
-
-                                            // Download XML File
-                                            FileInfo localxml = new FileInfo(localtransactionfolder.FullName + "\\" + spfile.Name);
-                                            Microsoft.SharePoint.Client.FileInformation fileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, spfile.ServerRelativeUrl);
-
-                                            using (FileStream sw = System.IO.File.OpenWrite(localxml.FullName))
-                                            {
-                                                using (fileInfo.Stream)
-                                                {
-                                                    while ((sizeread = fileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
-                                                    {
-                                                        sw.Write(buffer, 0, sizeread);
-                                                    }
-                                                }
-                                            }
                                         }
+
+                                        // Create Local committed
+                                        committed.Create();
+
+                                        this.Downloaded.Add(transactiondate);
                                     }
-
-                                    // Create Local committed
-                                    committed.Create();
-
+                                }
+                                else
+                                {
                                     this.Downloaded.Add(transactiondate);
                                 }
                             }
-                            else
-                            {
-                                this.Downloaded.Add(transactiondate);
-                            }
                         }
                     }
-                }
 
-                // Set Initialised to true once done one Sync
-                if (!this.Initialised)
+                    // Set Initialised to true once done one Sync
+                    if (!this.Initialised)
+                    {
+                        this.Initialised = true;
+                    }
+
+                    // Reset Reading Flag
+                    this.Reading = false;
+                }
+                catch (Exception)
                 {
-                    this.Initialised = true;
+                    
                 }
-
-                // Reset Reading Flag
-                this.Reading = false;
 
                 Thread.Sleep(this.SyncDelay * 1000);
             }

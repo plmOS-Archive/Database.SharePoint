@@ -264,7 +264,7 @@ namespace plmOS.Database.SharePoint
             }
         }
 
-        public Log Log { get; private set; }
+        public Logging.Log Log { get; private set; }
 
         private DirectoryInfo _localCache;
         public DirectoryInfo LocalCache 
@@ -497,7 +497,7 @@ namespace plmOS.Database.SharePoint
                 {
                     if (SPVaultFolder == null)
                     {
-                        this.Log.Add(plmOS.Log.Levels.INF, "Starting to upload to SharePoint: " + this.URL);
+                        this.Log.Add(plmOS.Logging.Log.Levels.INF, "Starting to upload to SharePoint: " + this.URL);
 
                         // Open SharePoint Context
                         SPContext = this.CreateContext();
@@ -606,7 +606,7 @@ namespace plmOS.Database.SharePoint
                 }
                 catch(Exception e)
                 {
-                    this.Log.Add(plmOS.Log.Levels.ERR, "SharePoint upload failed: " + e.Message);
+                    this.Log.Add(plmOS.Logging.Log.Levels.ERR, "SharePoint upload failed: " + e.Message);
                 }
 
                 // Sleep
@@ -636,7 +636,7 @@ namespace plmOS.Database.SharePoint
                 {
                     if (SPVaultFolder == null)
                     {
-                        this.Log.Add(plmOS.Log.Levels.INF, "Starting to download from SharePoint: " + this.URL);
+                        this.Log.Add(plmOS.Logging.Log.Levels.INF, "Starting to download from SharePoint: " + this.URL);
 
                         // Open SharePoint Context
                         SPContext = this.CreateContext();
@@ -773,7 +773,7 @@ namespace plmOS.Database.SharePoint
                 }
                 catch (Exception e)
                 {
-                    this.Log.Add(plmOS.Log.Levels.ERR, "SharePoint download failed: " + e.Message);
+                    this.Log.Add(plmOS.Logging.Log.Levels.ERR, "SharePoint download failed: " + e.Message);
                 }
 
                 Thread.Sleep(this.SyncDelay * 1000);
@@ -785,7 +785,7 @@ namespace plmOS.Database.SharePoint
 
         }
 
-        public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache, Int32 SyncDelay, Log Log)
+        public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache, Int32 SyncDelay, Logging.Log Log)
         {
             this.ItemTypeCache = new Dictionary<string, Model.ItemType>();
             this.ItemCache = new Dictionary<Model.ItemType, Dictionary<Guid, Item>>();
@@ -808,7 +808,7 @@ namespace plmOS.Database.SharePoint
             this.SyncDelay = SyncDelay;
             this.Log = Log;
 
-            this.Log.Add(plmOS.Log.Levels.INF, "Opening SharePoint Database: " + this.URL);
+            this.Log.Add(plmOS.Logging.Log.Levels.INF, "Opening SharePoint Database: " + this.URL);
             this.Reading = false;
             this.Writing = false;
             this.Initialised = false;

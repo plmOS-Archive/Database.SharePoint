@@ -497,7 +497,7 @@ namespace plmOS.Database.SharePoint
                 {
                     if (SPVaultFolder == null)
                     {
-                        this.Log.Add(plmOS.Logging.Log.Levels.INF, "Starting to upload to SharePoint: " + this.URL);
+                        this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to upload to SharePoint: " + this.URL);
 
                         // Open SharePoint Context
                         SPContext = this.CreateContext();
@@ -636,7 +636,7 @@ namespace plmOS.Database.SharePoint
                 {
                     if (SPVaultFolder == null)
                     {
-                        this.Log.Add(plmOS.Logging.Log.Levels.INF, "Starting to download from SharePoint: " + this.URL);
+                        this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to download from SharePoint: " + this.URL);
 
                         // Open SharePoint Context
                         SPContext = this.CreateContext();
@@ -808,7 +808,7 @@ namespace plmOS.Database.SharePoint
             this.SyncDelay = SyncDelay;
             this.Log = Log;
 
-            this.Log.Add(plmOS.Logging.Log.Levels.INF, "Opening SharePoint Database: " + this.URL);
+            this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Opening SharePoint Database: " + this.URL);
             this.Reading = false;
             this.Writing = false;
             this.Initialised = false;

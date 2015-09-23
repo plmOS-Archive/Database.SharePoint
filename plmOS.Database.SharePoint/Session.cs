@@ -508,6 +508,8 @@ namespace plmOS.Database.SharePoint
             {
                 try
                 {
+                    this.Writing = true;
+
                     if (SPVaultFolder == null)
                     {
                         this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to upload to SharePoint: " + this.URL);
@@ -533,7 +535,7 @@ namespace plmOS.Database.SharePoint
 
                     while (this.UploadQueue.Count > 0)
                     {
-                        this.Writing = true;
+                        
                         Int64 transactiondate = -1;
 
                         if (this.UploadQueue.TryPeek(out transactiondate))
@@ -563,7 +565,6 @@ namespace plmOS.Database.SharePoint
                                 if (!committedexists)
                                 {
                                     // Upload XML and Vault files to SharePoint
-                                    this.Writing = true;
 
                                     foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
                                     {
@@ -613,14 +614,14 @@ namespace plmOS.Database.SharePoint
                                 this.UploadQueue.TryDequeue(out transactiondate);
                             }
                         }
-                    }
-
-                    this.Writing = false;
+                    }     
                 }
                 catch(Exception e)
                 {
                     this.Log.Add(plmOS.Logging.Log.Levels.ERR, "SharePoint upload failed: " + e.Message);
                 }
+
+                this.Writing = false;
 
                 // Sleep
                 Thread.Sleep(this.SyncDelay * 1000);
@@ -647,6 +648,8 @@ namespace plmOS.Database.SharePoint
             {
                 try
                 {
+                    this.Reading = true;
+
                     if (SPVaultFolder == null)
                     {
                         this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to download from SharePoint: " + this.URL);
@@ -682,7 +685,6 @@ namespace plmOS.Database.SharePoint
                         {
                             if (!this.Downloaded.Contains(transactiondate))
                             {
-                                this.Reading = true;
 
                                 // Check if Transaction Folder Exists in Local Cache
                                 Boolean downloadneeded = true;
@@ -780,14 +782,14 @@ namespace plmOS.Database.SharePoint
                     {
                         this.Initialised = true;
                     }
-
-                    // Reset Reading Flag
-                    this.Reading = false;
                 }
                 catch (Exception e)
                 {
                     this.Log.Add(plmOS.Logging.Log.Levels.ERR, "SharePoint download failed: " + e.Message);
                 }
+
+                // Reset Reading Flag
+                this.Reading = false;
 
                 Thread.Sleep(this.SyncDelay * 1000);
             }

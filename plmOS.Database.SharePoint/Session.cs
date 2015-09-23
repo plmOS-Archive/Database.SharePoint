@@ -31,12 +31,23 @@ using System.IO;
 using Microsoft.SharePoint.Client;
 using System.Threading;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 
 namespace plmOS.Database.SharePoint
 {
     public class Session : Database.ISession
     {
         const int buffersize = 256;
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropertyChanged(String Name)
+        {
+            if (this.PropertyChanged != null)
+            {
+                this.PropertyChanged.Invoke(this, new PropertyChangedEventArgs(Name));
+            }
+        }
 
         private object ReadingLock = new object();
         private volatile Boolean _reading;
@@ -53,7 +64,11 @@ namespace plmOS.Database.SharePoint
             {
                 lock (this.ReadingLock)
                 {
-                    this._reading = value;
+                    if (this._reading != value)
+                    {
+                        this._reading = value;
+                        this.OnPropertyChanged("Reading");
+                    }
                 }
             }
         }
@@ -73,7 +88,11 @@ namespace plmOS.Database.SharePoint
             {
                 lock (this.WritingLock)
                 {
-                    this._wrting = value;
+                    if (this._wrting != value)
+                    {
+                        this._wrting = value;
+                        this.OnPropertyChanged("Writing");
+                    }
                 }
             }
         }
@@ -84,7 +103,7 @@ namespace plmOS.Database.SharePoint
         {
             get
             {
-                lock(this.InitialisedLock)
+                lock (this.InitialisedLock)
                 {
                     return this._initialised;
                 }
@@ -93,20 +112,14 @@ namespace plmOS.Database.SharePoint
             {
                 lock (this.InitialisedLock)
                 {
-                    this._initialised = value;
-
-                    if (this._initialised)
+                    if (this._initialised != value)
                     {
-                        if (this.InitialseCompleted != null)
-                        {
-                            this.InitialseCompleted(this, new EventArgs());
-                        }
+                        this._initialised = value;
+                        this.OnPropertyChanged("Initialised");
                     }
                 }
             }
         }
-
-        public event EventHandler InitialseCompleted;
 
         private Dictionary<String, Model.ItemType> ItemTypeCache;
 
@@ -787,6 +800,10 @@ namespace plmOS.Database.SharePoint
 
         public Session(Uri URL, String Username, String Password, DirectoryInfo LocalCache, Int32 SyncDelay, Logging.Log Log)
         {
+            this.Reading = false;
+            this.Writing = false;
+            this.Initialised = false;
+
             this.ItemTypeCache = new Dictionary<string, Model.ItemType>();
             this.ItemCache = new Dictionary<Model.ItemType, Dictionary<Guid, Item>>();
             this.Loaded = new List<Int64>();
@@ -809,9 +826,6 @@ namespace plmOS.Database.SharePoint
             this.Log = Log;
 
             this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Opening SharePoint Database: " + this.URL);
-            this.Reading = false;
-            this.Writing = false;
-            this.Initialised = false;
 
             // Start Upload
             this.UploadThread = new Thread(this.Upload);

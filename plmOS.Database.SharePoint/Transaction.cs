@@ -51,25 +51,28 @@ namespace plmOS.Database.SharePoint
 
         public void Commit()
         {
-            this.ComittedTime = DateTime.UtcNow.Ticks;
-            this.Directory = new DirectoryInfo(this.Session.LocalRootFolder.FullName + "\\" + this.ComittedTime.ToString());
-            this.Directory.Create();
-
-            foreach (Item item in this.Items)
+            if (this.Items.Count() > 0)
             {
-                item.Write(this.Directory);
+                this.ComittedTime = DateTime.UtcNow.Ticks;
+                this.Directory = new DirectoryInfo(this.Session.LocalRootFolder.FullName + "\\" + this.ComittedTime.ToString());
+                this.Directory.Create();
+
+                foreach (Item item in this.Items)
+                {
+                    item.Write(this.Directory);
+                }
+
+                // Create Committed File
+                FileInfo committed = new FileInfo(this.Directory.FullName + "\\committed");
+
+                using (FileStream sr = new FileStream(committed.FullName, FileMode.Create))
+                {
+
+                }
+
+                // Add to Upload Queue
+                this.Session.AddToUploadQueue(this);
             }
-
-            // Create Committed File
-            FileInfo committed = new FileInfo(this.Directory.FullName + "\\committed");
-            
-            using(FileStream sr = new FileStream(committed.FullName, FileMode.Create))
-            {
-
-            }
-
-            // Add to Upload Queue
-            this.Session.AddToUploadQueue(this);
         }
 
 

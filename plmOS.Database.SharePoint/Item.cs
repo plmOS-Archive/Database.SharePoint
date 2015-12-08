@@ -104,7 +104,19 @@ namespace plmOS.Database.SharePoint
                                 default:
                                     throw new NotImplementedException("Condition Operator not implemeted: " + ((Model.Conditions.Property)Condition).Operator);
                             }
+                        case Model.PropertyTypeValues.Boolean:
+                            Boolean boolvalue = (Boolean)property.Object;
+                            Boolean boolconditionvalue = (Boolean)(((Model.Conditions.Property)Condition).Value);
 
+                            switch (((Model.Conditions.Property)Condition).Operator)
+                            {
+                                case Model.Conditions.Operators.eq:
+                                    return (boolvalue == boolconditionvalue);
+                                case Model.Conditions.Operators.ne:
+                                    return (boolvalue != boolconditionvalue);
+                                default:
+                                    throw new NotImplementedException("Condition Operator not implemeted: " + ((Model.Conditions.Property)Condition).Operator);
+                            }
                         default:
                             throw new NotImplementedException("PropertyType not implemented: " + property.PropertyType.Type);
                     }

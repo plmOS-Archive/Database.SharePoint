@@ -189,26 +189,21 @@ namespace plmOS.Database.SharePoint
             }
         }
 
-        private object InitialisedLock = new object();
-        private volatile Boolean _initialised;
+
+        private Boolean _initialised;
         public Boolean Initialised
         {
             get
             {
-                lock (this.InitialisedLock)
-                {
-                    return this._initialised;
-                }
+                return this._initialised;
             }
             private set
             {
-                lock (this.InitialisedLock)
+
+                if (this._initialised != value)
                 {
-                    if (this._initialised != value)
-                    {
-                        this._initialised = value;
-                        this.OnPropertyChanged("Initialised");
-                    }
+                    this._initialised = value;
+                    this.OnPropertyChanged("Initialised");
                 }
             }
         }
@@ -396,7 +391,7 @@ namespace plmOS.Database.SharePoint
                 }
 
                 // Set Local Root Folder and ensure exists
-                this.LocalRootFolder = new DirectoryInfo(this._localCache.FullName + "\\" + this.URL.Host + this.URL.AbsolutePath.Replace('/', '\\') + "\\Database");
+                this.LocalRootFolder = new DirectoryInfo(this._localCache.FullName + this.URL.AbsolutePath.Replace('/', '\\') + "\\Database");
 
                 if (!this.LocalRootFolder.Exists)
                 {
@@ -803,7 +798,6 @@ namespace plmOS.Database.SharePoint
 
                         foreach (Folder transactionfolder in tobedownlaoded)
                         {
-                            this.ReadingNumber++;
                             Int64 transactiondate = -1;
 
                             if (Int64.TryParse(transactionfolder.Name, out transactiondate))
@@ -899,6 +893,8 @@ namespace plmOS.Database.SharePoint
                                     }
                                 }
                             }
+
+                            this.ReadingNumber++;
                         }
 
                         this.Reading = false;

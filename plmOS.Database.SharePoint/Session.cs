@@ -905,20 +905,6 @@ namespace plmOS.Database.SharePoint
                     // Set Initialised to true once done one Sync
                     if (!this.Initialised)
                     {
-                        // Remove any directories from Cache that are not on SharePoint
-                        foreach (DirectoryInfo transactiodirectory in this.LocalRootFolder.GetDirectories())
-                        {
-                            Int64 transactiodate = -1;
-
-                            if (Int64.TryParse(transactiodirectory.Name, out transactiodate))
-                            {
-                                if (!this.Downloaded.Contains(transactiodate))
-                                {
-                                    transactiodirectory.Delete(true);
-                                }
-                            }
-                        }
-
                         // Set to Initialised
                         this.Initialised = true;
 
@@ -931,6 +917,7 @@ namespace plmOS.Database.SharePoint
                 catch (Exception e)
                 {
                     this.Log.Add(plmOS.Logging.Log.Levels.ERR, "SharePoint download failed: " + e.Message);
+                    this.Log.Add(plmOS.Logging.Log.Levels.DEB, "SharePoint download failed: " + e.Message + Environment.NewLine + e.StackTrace);
                 }
 
                 // Delay to next check

@@ -884,15 +884,31 @@ namespace plmOS.Database.SharePoint
                                         ZipFile.ExtractToDirectory(localtransactionfile.FullName, localtransactiontmpfolder.FullName);
                                         
                                         // Move XML Files to Transaction Directory
-                                        foreach(FileInfo xmlfile in localtransactiontmpfolder.GetFiles("*.xml"))
+                                        foreach(FileInfo tmpxmlfile in localtransactiontmpfolder.GetFiles("*.xml"))
                                         {
-                                            xmlfile.MoveTo(localtransactionfolder.FullName + "\\" + xmlfile.Name);
+                                            FileInfo xmlfile = new FileInfo(localtransactionfolder.FullName + "\\" + tmpxmlfile.Name);
+
+                                            if (xmlfile.Exists)
+                                            {
+                                                xmlfile.Delete();
+                                                xmlfile.Refresh();
+                                            }
+
+                                            tmpxmlfile.MoveTo(xmlfile.FullName);
                                         }
 
                                         // Move Vault Files to Vault
-                                        foreach (FileInfo vaultfile in localtransactiontmpfolder.GetFiles("*.dat"))
+                                        foreach (FileInfo tmpvaultfile in localtransactiontmpfolder.GetFiles("*.dat"))
                                         {
-                                            vaultfile.MoveTo(this.LocalVaultFolder.FullName + "\\" + vaultfile.Name);
+                                            FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + tmpvaultfile.Name);
+
+                                            if (vaultfile.Exists)
+                                            {
+                                                vaultfile.Delete();
+                                                vaultfile.Refresh();
+                                            }
+
+                                            tmpvaultfile.MoveTo(vaultfile.FullName);
                                         }
 
                                         // Delete Temp Folder

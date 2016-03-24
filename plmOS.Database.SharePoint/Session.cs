@@ -74,19 +74,20 @@ namespace plmOS.Database.SharePoint
             }
         }
 
+        private object ReadingTotalLock = new object();
         private volatile Int32 _readingTotal;
         public Int32 ReadingTotal
         {
             get
             {
-                lock(this.ReadingLock)
+                lock (this.ReadingTotalLock)
                 {
                     return this._readingTotal;
                 }
             }
             private set
             {
-                lock(this.ReadingLock)
+                lock (this.ReadingTotalLock)
                 {
                     if (this._readingTotal != value)
                     {
@@ -97,19 +98,20 @@ namespace plmOS.Database.SharePoint
             }
         }
 
+        private object ReadingNumberLock = new object();
         private volatile Int32 _readingNumber;
         public Int32 ReadingNumber
         {
             get
             {
-                lock (this.ReadingLock)
+                lock (this.ReadingNumberLock)
                 {
                     return this._readingNumber;
                 }
             }
             private set
             {
-                lock (this.ReadingLock)
+                lock (this.ReadingNumberLock)
                 {
                     if (this._readingNumber != value)
                     {
@@ -121,42 +123,44 @@ namespace plmOS.Database.SharePoint
         }
 
         private object WritingLock = new object();
-        private volatile Boolean _wrting;
+        private volatile Boolean _writing;
         public Boolean Writing
         {
             get
             {
                 lock (this.WritingLock)
                 {
-                    return this._wrting;
+                    return this._writing;
                 }
             }
             internal set
             {
                 lock (this.WritingLock)
                 {
-                    if (this._wrting != value)
+                    if (this._writing != value)
                     {
-                        this._wrting = value;
-                        this.OnPropertyChanged("Writing");
+                        this._writing = value;
                     }
                 }
+
+                this.OnPropertyChanged("Writing");
             }
         }
 
+        private object WritingTotalLock = new object();
         private volatile Int32 _writingTotal;
         public Int32 WritingTotal
         {
             get
             {
-                lock (this.WritingLock)
+                lock (this.WritingTotalLock)
                 {
                     return this._writingTotal;
                 }
             }
             private set
             {
-                lock (this.WritingLock)
+                lock (this.WritingTotalLock)
                 {
                     if (this._writingTotal != value)
                     {
@@ -167,19 +171,20 @@ namespace plmOS.Database.SharePoint
             }
         }
 
+        private object WritingNumberLock = new object();
         private volatile Int32 _writingNumber;
         public Int32 WritingNumber
         {
             get
             {
-                lock (this.WritingLock)
+                lock (this.WritingNumberLock)
                 {
                     return this._writingNumber;
                 }
             }
             private set
             {
-                lock (this.WritingLock)
+                lock (this.WritingNumberLock)
                 {
                     if (this._writingNumber != value)
                     {

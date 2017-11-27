@@ -28,7 +28,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
-using Microsoft.SharePoint.Client;
 using System.Threading;
 using System.Collections.Concurrent;
 using System.ComponentModel;
@@ -538,48 +537,35 @@ namespace plmOS.Database.SharePoint
             }
         }
 
-        private ClientContext CreateContext()
-        {
-            // Create SharePoint Context
-            ClientContext SPContext = new ClientContext(this.SiteURL.AbsoluteUri);
-            SPContext.Credentials = new SharePointOnlineCredentials(this.Username, this.Password);
-            return SPContext;
-        }
-
-        private Folder OpenBaseFolder(ClientContext Context)
+        private Microsoft.SharePoint.Client.Folder OpenBaseFolder(Microsoft.SharePoint.Client.ClientContext Context)
         {
             // Open Base Folder
-            Folder SPBaseFolder = Context.Web.RootFolder;
+            Microsoft.SharePoint.Client.Folder SPBaseFolder = Context.Web.RootFolder;
             Context.Load(SPBaseFolder);
             Context.ExecuteQuery();
             return SPBaseFolder;
         }
 
-        private Object folderlock = new Object();
-
-        private Folder OpenFolder(ClientContext Context, Folder BaseFolder, String Name)
+        private Microsoft.SharePoint.Client.Folder OpenFolder(Microsoft.SharePoint.Client.ClientContext Context, Microsoft.SharePoint.Client.Folder BaseFolder, String Name)
         {
-            lock (this.folderlock)
+            Microsoft.SharePoint.Client.Folder SPRootFolder = null;
+
+            try
             {
-                Folder SPRootFolder = null;
-
-                try
-                {
-                    // Ensure SPRootFolder Exists
-                    SPRootFolder = BaseFolder.Folders.GetByUrl(Name);
-                    Context.Load(SPRootFolder);
-                    Context.ExecuteQuery();
-                }
-                catch (Microsoft.SharePoint.Client.ServerException)
-                {
-                    // CreateSPRoot Folder
-                    SPRootFolder = BaseFolder.Folders.Add(Name);
-                    Context.Load(SPRootFolder);
-                    Context.ExecuteQuery();
-                }
-
-                return SPRootFolder;
+                // Ensure SPRootFolder Exists
+                SPRootFolder = BaseFolder.Folders.GetByUrl(Name);
+                Context.Load(SPRootFolder);
+                Context.ExecuteQuery();
             }
+            catch (Microsoft.SharePoint.Client.ServerException)
+            {
+                // CreateSPRoot Folder
+                SPRootFolder = BaseFolder.Folders.Add(Name);
+                Context.Load(SPRootFolder);
+                Context.ExecuteQuery();
+            }
+
+            return SPRootFolder;
         }
 
         private Thread UploadThread;
@@ -598,12 +584,6 @@ namespace plmOS.Database.SharePoint
 
         private void Upload()
         {
-            ClientContext SPContext = null;
-            Folder SPBaseFolder = null;
-            Folder SPSupplierFolder = null;
-            Folder SPProjectFolder = null;
-            Folder SPRootFolder = null;
-
             while (true)
             {
                 try
@@ -616,25 +596,7 @@ namespace plmOS.Database.SharePoint
                         this.Writing = true;
                         this.WritingNumber++;
 
-                        if (SPRootFolder == null)
-                        {
-                            this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to upload to SharePoint: " + this.URL);
-
-                            // Open SharePoint Context
-                            SPContext = this.CreateContext();
-
-                            // Open Base Folder
-                            SPBaseFolder = this.OpenBaseFolder(SPContext);
-
-                            // Open Supplier Folder
-                            SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
-
-                            // Open Project Folder
-                            SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
-
-                            // Open Root Folder
-                            SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
-                        }
+                        this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to upload to SharePoint: " + this.URL);
 
                         Int64 transactiondate = -1;
 
@@ -646,89 +608,106 @@ namespace plmOS.Database.SharePoint
 
                             if (committed.Exists)
                             {
-                                // Check for Transaction File on SharePoint
-                                SPContext.Load(SPRootFolder.Files);
-                                SPContext.ExecuteQuery();
-
-                                Boolean committedexists = false;
-
-                                foreach (Microsoft.SharePoint.Client.File spfile in SPRootFolder.Files)
+                                using (Microsoft.SharePoint.Client.ClientContext SPContext = new Microsoft.SharePoint.Client.ClientContext(this.SiteURL.AbsoluteUri))
                                 {
-                                    if (spfile.Name == transactiondate.ToString() + ".committed")
-                                    {
-                                        committedexists = true;
-                                        break;
-                                    }
-                                }
+                                    SPContext.Credentials = new Microsoft.SharePoint.Client.SharePointOnlineCredentials(this.Username, this.Password);
 
-                                if (!committedexists)
-                                {
-                                    // Create Temp Folder
-                                    DirectoryInfo tmptransactiondir = new DirectoryInfo(transactiondir.FullName + ".upload");
+                                    // Open Base Folder
+                                    Microsoft.SharePoint.Client.Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
 
-                                    if (tmptransactiondir.Exists)
+                                    // Open Supplier Folder
+                                    Microsoft.SharePoint.Client.Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
+
+                                    // Open Project Folder
+                                    Microsoft.SharePoint.Client.Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
+
+                                    // Open Root Folder
+                                    Microsoft.SharePoint.Client.Folder SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
+
+                                    // Check for Transaction File on SharePoint
+                                    SPContext.Load(SPRootFolder.Files);
+                                    SPContext.ExecuteQuery();
+
+                                    Boolean committedexists = false;
+
+                                    foreach (Microsoft.SharePoint.Client.File spfile in SPRootFolder.Files)
                                     {
-                                        foreach(FileInfo file in tmptransactiondir.GetFiles())
+                                        if (spfile.Name == transactiondate.ToString() + ".committed")
                                         {
-                                            file.Delete();
+                                            committedexists = true;
+                                            break;
                                         }
                                     }
-                                    else
-                                    {
-                                        tmptransactiondir.Create();
-                                    }
 
-                                    // Copy XML Files and Vault Files to temp folder
-                                    foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
+                                    if (!committedexists)
                                     {
-                                        if (xmlfile.Name.EndsWith(".file.xml"))
+                                        // Create Temp Folder
+                                        DirectoryInfo tmptransactiondir = new DirectoryInfo(transactiondir.FullName + ".upload");
+
+                                        if (tmptransactiondir.Exists)
                                         {
-                                            // Copy Vault File
-                                            FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + xmlfile.Name.Replace(".file.xml", ".dat"));
-                                            vaultfile.CopyTo(tmptransactiondir.FullName + "\\" + vaultfile.Name);
+                                            foreach (FileInfo file in tmptransactiondir.GetFiles())
+                                            {
+                                                file.Delete();
+                                            }
+                                        }
+                                        else
+                                        {
+                                            tmptransactiondir.Create();
                                         }
 
-                                        xmlfile.CopyTo(tmptransactiondir.FullName + "\\" + xmlfile.Name);
-                                    }
+                                        // Copy XML Files and Vault Files to temp folder
+                                        foreach (FileInfo xmlfile in transactiondir.GetFiles("*.xml"))
+                                        {
+                                            if (xmlfile.Name.EndsWith(".file.xml"))
+                                            {
+                                                // Copy Vault File
+                                                FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + xmlfile.Name.Replace(".file.xml", ".dat"));
+                                                vaultfile.CopyTo(tmptransactiondir.FullName + "\\" + vaultfile.Name);
+                                            }
 
-                                    // Create ZIP File
-                                    FileInfo transactionzipfile = new FileInfo(transactiondir.FullName + ".zip");
+                                            xmlfile.CopyTo(tmptransactiondir.FullName + "\\" + xmlfile.Name);
+                                        }
 
-                                    if (transactionzipfile.Exists)
-                                    {
+                                        // Create ZIP File
+                                        FileInfo transactionzipfile = new FileInfo(transactiondir.FullName + ".zip");
+
+                                        if (transactionzipfile.Exists)
+                                        {
+                                            transactionzipfile.Delete();
+                                        }
+
+                                        ZipFile.CreateFromDirectory(tmptransactiondir.FullName, transactionzipfile.FullName);
+
+                                        // Upload ZIP File
+                                        using (FileStream sr = System.IO.File.OpenRead(transactionzipfile.FullName))
+                                        {
+                                            Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPRootFolder.ServerRelativeUrl + "/" + transactionzipfile.Name, sr, true);
+                                        }
+
+                                        // Upload Comitted File
+                                        using (FileStream sr = System.IO.File.OpenRead(committed.FullName))
+                                        {
+                                            Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPRootFolder.ServerRelativeUrl + "/" + Path.GetFileNameWithoutExtension(transactionzipfile.Name) + ".comitted", sr, true);
+                                        }
+
+                                        // Delete ZIP File
                                         transactionzipfile.Delete();
+
+                                        // Delete Temp Folder
+                                        tmptransactiondir.Delete(true);
                                     }
 
-                                    ZipFile.CreateFromDirectory(tmptransactiondir.FullName, transactionzipfile.FullName);
-
-                                    // Upload ZIP File
-                                    using (FileStream sr = System.IO.File.OpenRead(transactionzipfile.FullName))
-                                    {
-                                        Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPRootFolder.ServerRelativeUrl + "/" + transactionzipfile.Name, sr, true);
-                                    }
-
-                                    // Upload Comitted File
-                                    using (FileStream sr = System.IO.File.OpenRead(committed.FullName))
-                                    {
-                                        Microsoft.SharePoint.Client.File.SaveBinaryDirect(SPContext, SPRootFolder.ServerRelativeUrl + "/" + Path.GetFileNameWithoutExtension(transactionzipfile.Name) + ".comitted", sr, true);
-                                    }
-
-                                    // Delete ZIP File
-                                    transactionzipfile.Delete();
-
-                                    // Delete Temp Folder
-                                    tmptransactiondir.Delete(true);
+                                    // Completed - remove Transaction from Queue
+                                    this.UploadQueue.TryDequeue(out transactiondate);
                                 }
-
-                                // Completed - remove Transaction from Queue
-                                this.UploadQueue.TryDequeue(out transactiondate);
                             }
                         }
 
                         this.Writing = false;
-                    }     
+                    }
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     this.Log.Add(plmOS.Logging.Log.Levels.ERR, "SharePoint upload failed: " + e.Message);
                     this.Writing = false;
@@ -748,210 +727,203 @@ namespace plmOS.Database.SharePoint
             byte[] buffer = new byte[buffersize];
             int sizeread = 0;
 
-            ClientContext SPContext = null;
-            Folder SPBaseFolder = null;
-            Folder SPSupplierFolder = null;
-            Folder SPProjectFolder = null;
-            Folder SPRootFolder = null;
-
             while (true)
             {
                 try
                 {
-                    if (SPRootFolder == null)
-                    {
-                        this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to download from SharePoint: " + this.URL);
+                    this.Log.Add(plmOS.Logging.Log.Levels.DEB, "Starting to download from SharePoint: " + this.URL);
 
-                        // Open SharePoint Context
-                        SPContext = this.CreateContext();
+                    using (Microsoft.SharePoint.Client.ClientContext SPContext = new Microsoft.SharePoint.Client.ClientContext(this.SiteURL.AbsoluteUri))
+                    {
+                        SPContext.Credentials = new Microsoft.SharePoint.Client.SharePointOnlineCredentials(this.Username, this.Password);
 
                         // Open Base Folder
-                        SPBaseFolder = this.OpenBaseFolder(SPContext);
+                        Microsoft.SharePoint.Client.Folder SPBaseFolder = this.OpenBaseFolder(SPContext);
 
                         // Open Supplier Folder
-                        SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
+                        Microsoft.SharePoint.Client.Folder SPSupplierFolder = this.OpenFolder(SPContext, SPBaseFolder, this.SupplierID);
 
                         // Open Project Folder
-                        SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
+                        Microsoft.SharePoint.Client.Folder SPProjectFolder = this.OpenFolder(SPContext, SPSupplierFolder, this.ProjectID);
 
                         // Open Root Folder
-                        SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
-                    }
+                        Microsoft.SharePoint.Client.Folder SPRootFolder = this.OpenFolder(SPContext, SPProjectFolder, "Database");
 
-                    // Get Listing of Transaction files on SharePoint
-                    SPContext.Load(SPRootFolder.Files);
-                    SPContext.ExecuteQuery();
+                        // Get Listing of Transaction files on SharePoint
+                        SPContext.Load(SPRootFolder.Files);
+                        SPContext.ExecuteQuery();
 
-                    // Create list of comitted Transactions
-                    List<Int64> committedtransactions = new List<Int64>();
+                        // Create list of comitted Transactions
+                        List<Int64> committedtransactions = new List<Int64>();
 
-                    foreach (Microsoft.SharePoint.Client.File transactionfile in SPRootFolder.Files)
-                    {
-                        Int64 transactiondate = -1;
-
-                        if (Path.GetExtension(transactionfile.Name).ToLower() == ".comitted")
-                        {
-                            if (Int64.TryParse(Path.GetFileNameWithoutExtension(transactionfile.Name), out transactiondate))
-                            {
-                                if (!committedtransactions.Contains(transactiondate))
-                                {
-                                    committedtransactions.Add(transactiondate);
-                                }
-                            }
-                        }
-                    }
-
-                    // Create List of Transactions that need to be Downloaded
-                    List<Microsoft.SharePoint.Client.File> tobedownlaoded = new List<Microsoft.SharePoint.Client.File>();
-
-                    foreach (Microsoft.SharePoint.Client.File transactionfile in SPRootFolder.Files)
-                    {
-                        Int64 transactiondate = -1;
-
-                        if (Path.GetExtension(transactionfile.Name).ToLower() == ".zip")
-                        {
-                            if (Int64.TryParse(Path.GetFileNameWithoutExtension(transactionfile.Name), out transactiondate))
-                            {
-                                if (committedtransactions.Contains(transactiondate))
-                                {
-                                    if (!this.Downloaded.Contains(transactiondate))
-                                    {
-                                        tobedownlaoded.Add(transactionfile);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (tobedownlaoded.Count > 0)
-                    {
-                        this.ReadingTotal = tobedownlaoded.Count;
-                        this.ReadingNumber = 0;
-                        this.Reading = true;
-
-                        foreach (Microsoft.SharePoint.Client.File transactionfile in tobedownlaoded)
+                        foreach (Microsoft.SharePoint.Client.File transactionfile in SPRootFolder.Files)
                         {
                             Int64 transactiondate = -1;
 
-                            if (Int64.TryParse(Path.GetFileNameWithoutExtension(transactionfile.Name), out transactiondate))
+                            if (Path.GetExtension(transactionfile.Name).ToLower() == ".comitted")
                             {
-                                if (!this.Downloaded.Contains(transactiondate))
+                                if (Int64.TryParse(Path.GetFileNameWithoutExtension(transactionfile.Name), out transactiondate))
                                 {
-                                    // Check if Transaction Folder Exists in Local Cache
-                                    Boolean downloadneeded = true;
-
-                                    DirectoryInfo localtransactionfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
-                                    DirectoryInfo localtransactiontmpfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString() + ".download");
-                                    FileInfo committed = new FileInfo(localtransactionfolder.FullName + "\\committed");
-
-                                    if (localtransactionfolder.Exists)
+                                    if (!committedtransactions.Contains(transactiondate))
                                     {
-                                        if (committed.Exists)
-                                        {
-                                            downloadneeded = false;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        localtransactionfolder.Create();
-                                    }
-
-                                    if (downloadneeded)
-                                    {
-                                        // Download Transaction File from SharePoint
-                                        FileInfo localtransactionfile = new FileInfo(this.LocalRootFolder.FullName + "\\" + transactionfile.Name);
-                                        Microsoft.SharePoint.Client.FileInformation transactionfileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, transactionfile.ServerRelativeUrl);
-
-                                        using (FileStream sw = System.IO.File.OpenWrite(localtransactionfile.FullName))
-                                        {
-                                            using (transactionfileInfo.Stream)
-                                            {
-                                                while ((sizeread = transactionfileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
-                                                {
-                                                    sw.Write(buffer, 0, sizeread);
-                                                }
-                                            }
-                                        }
-
-                                        // Extract files from ZIP File
-                                        if (!localtransactiontmpfolder.Exists)
-                                        {
-                                            localtransactiontmpfolder.Create();
-                                        }
-                                        else
-                                        {
-                                            foreach(FileInfo file in localtransactiontmpfolder.GetFiles())
-                                            {
-                                                file.Delete();
-                                            }
-                                        }
-
-                                        ZipFile.ExtractToDirectory(localtransactionfile.FullName, localtransactiontmpfolder.FullName);
-                                        
-                                        // Move XML Files to Transaction Directory
-                                        foreach(FileInfo tmpxmlfile in localtransactiontmpfolder.GetFiles("*.xml"))
-                                        {
-                                            FileInfo xmlfile = new FileInfo(localtransactionfolder.FullName + "\\" + tmpxmlfile.Name);
-
-                                            if (xmlfile.Exists)
-                                            {
-                                                xmlfile.Delete();
-                                                xmlfile.Refresh();
-                                            }
-
-                                            tmpxmlfile.MoveTo(xmlfile.FullName);
-                                        }
-
-                                        // Move Vault Files to Vault
-                                        foreach (FileInfo tmpvaultfile in localtransactiontmpfolder.GetFiles("*.dat"))
-                                        {
-                                            FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + tmpvaultfile.Name);
-
-                                            if (vaultfile.Exists)
-                                            {
-                                                vaultfile.Delete();
-                                                vaultfile.Refresh();
-                                            }
-
-                                            tmpvaultfile.MoveTo(vaultfile.FullName);
-                                        }
-
-                                        // Delete Temp Folder
-                                        localtransactiontmpfolder.Delete(true);
-
-                                        // Delete ZIP File
-                                        localtransactionfile.Delete();
-
-                                        // Create Committ File
-                                        committed.Create();
-
-                                        this.Downloaded.Add(transactiondate);
-                                    }
-                                    else
-                                    {
-                                        this.Downloaded.Add(transactiondate);
+                                        committedtransactions.Add(transactiondate);
                                     }
                                 }
                             }
-
-                            this.ReadingNumber++;
                         }
 
-                        this.Reading = false;
-                        this.ReadingTotal = 0;
-                        this.ReadingNumber = 0;
-                    }
+                        // Create List of Transactions that need to be Downloaded
+                        List<Microsoft.SharePoint.Client.File> tobedownlaoded = new List<Microsoft.SharePoint.Client.File>();
 
-                    // Set Initialised to true once done one Sync
-                    if (!this.Initialised)
-                    {
-                        // Set to Initialised
-                        this.Initialised = true;
+                        foreach (Microsoft.SharePoint.Client.File transactionfile in SPRootFolder.Files)
+                        {
+                            Int64 transactiondate = -1;
 
-                        // Start Upload
-                        this.UploadThread = new Thread(this.Upload);
-                        this.UploadThread.IsBackground = true;
-                        this.UploadThread.Start();
+                            if (Path.GetExtension(transactionfile.Name).ToLower() == ".zip")
+                            {
+                                if (Int64.TryParse(Path.GetFileNameWithoutExtension(transactionfile.Name), out transactiondate))
+                                {
+                                    if (committedtransactions.Contains(transactiondate))
+                                    {
+                                        if (!this.Downloaded.Contains(transactiondate))
+                                        {
+                                            tobedownlaoded.Add(transactionfile);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (tobedownlaoded.Count > 0)
+                        {
+                            this.ReadingTotal = tobedownlaoded.Count;
+                            this.ReadingNumber = 0;
+                            this.Reading = true;
+
+                            foreach (Microsoft.SharePoint.Client.File transactionfile in tobedownlaoded)
+                            {
+                                Int64 transactiondate = -1;
+
+                                if (Int64.TryParse(Path.GetFileNameWithoutExtension(transactionfile.Name), out transactiondate))
+                                {
+                                    if (!this.Downloaded.Contains(transactiondate))
+                                    {
+                                        // Check if Transaction Folder Exists in Local Cache
+                                        Boolean downloadneeded = true;
+
+                                        DirectoryInfo localtransactionfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString());
+                                        DirectoryInfo localtransactiontmpfolder = new DirectoryInfo(this.LocalRootFolder.FullName + "\\" + transactiondate.ToString() + ".download");
+                                        FileInfo committed = new FileInfo(localtransactionfolder.FullName + "\\committed");
+
+                                        if (localtransactionfolder.Exists)
+                                        {
+                                            if (committed.Exists)
+                                            {
+                                                downloadneeded = false;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            localtransactionfolder.Create();
+                                        }
+
+                                        if (downloadneeded)
+                                        {
+                                            // Download Transaction File from SharePoint
+                                            FileInfo localtransactionfile = new FileInfo(this.LocalRootFolder.FullName + "\\" + transactionfile.Name);
+                                            Microsoft.SharePoint.Client.FileInformation transactionfileInfo = Microsoft.SharePoint.Client.File.OpenBinaryDirect(SPContext, transactionfile.ServerRelativeUrl);
+
+                                            using (FileStream sw = System.IO.File.OpenWrite(localtransactionfile.FullName))
+                                            {
+                                                using (transactionfileInfo.Stream)
+                                                {
+                                                    while ((sizeread = transactionfileInfo.Stream.Read(buffer, 0, buffersize)) > 0)
+                                                    {
+                                                        sw.Write(buffer, 0, sizeread);
+                                                    }
+                                                }
+                                            }
+
+                                            // Extract files from ZIP File
+                                            if (!localtransactiontmpfolder.Exists)
+                                            {
+                                                localtransactiontmpfolder.Create();
+                                            }
+                                            else
+                                            {
+                                                foreach (FileInfo file in localtransactiontmpfolder.GetFiles())
+                                                {
+                                                    file.Delete();
+                                                }
+                                            }
+
+                                            ZipFile.ExtractToDirectory(localtransactionfile.FullName, localtransactiontmpfolder.FullName);
+
+                                            // Move XML Files to Transaction Directory
+                                            foreach (FileInfo tmpxmlfile in localtransactiontmpfolder.GetFiles("*.xml"))
+                                            {
+                                                FileInfo xmlfile = new FileInfo(localtransactionfolder.FullName + "\\" + tmpxmlfile.Name);
+
+                                                if (xmlfile.Exists)
+                                                {
+                                                    xmlfile.Delete();
+                                                    xmlfile.Refresh();
+                                                }
+
+                                                tmpxmlfile.MoveTo(xmlfile.FullName);
+                                            }
+
+                                            // Move Vault Files to Vault
+                                            foreach (FileInfo tmpvaultfile in localtransactiontmpfolder.GetFiles("*.dat"))
+                                            {
+                                                FileInfo vaultfile = new FileInfo(this.LocalVaultFolder.FullName + "\\" + tmpvaultfile.Name);
+
+                                                if (vaultfile.Exists)
+                                                {
+                                                    vaultfile.Delete();
+                                                    vaultfile.Refresh();
+                                                }
+
+                                                tmpvaultfile.MoveTo(vaultfile.FullName);
+                                            }
+
+                                            // Delete Temp Folder
+                                            localtransactiontmpfolder.Delete(true);
+
+                                            // Delete ZIP File
+                                            localtransactionfile.Delete();
+
+                                            // Create Committ File
+                                            committed.Create();
+
+                                            this.Downloaded.Add(transactiondate);
+                                        }
+                                        else
+                                        {
+                                            this.Downloaded.Add(transactiondate);
+                                        }
+                                    }
+                                }
+
+                                this.ReadingNumber++;
+                            }
+
+                            this.Reading = false;
+                            this.ReadingTotal = 0;
+                            this.ReadingNumber = 0;
+                        }
+
+                        // Set Initialised to true once done one Sync
+                        if (!this.Initialised)
+                        {
+                            // Set to Initialised
+                            this.Initialised = true;
+
+                            // Start Upload
+                            this.UploadThread = new Thread(this.Upload);
+                            this.UploadThread.IsBackground = true;
+                            this.UploadThread.Start();
+                        }
                     }
                 }
                 catch (Exception e)
